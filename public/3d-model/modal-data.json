@@ -1,0 +1,269 @@
+{
+  "machines": [
+    {
+      "id": "arrow",
+      "previewImage": "/3d-model/textures/arrow-preview.jpg",
+      "title": "Arrow Indicator",
+      "machineId": "IND-000-AR",
+      "PLC": "-",
+      "nodeRed": "-",
+      "dateAdded": "2025-01-10",
+      "location": "Floor 0 - Conveyor",
+      "indicators": {
+        "airTemperature": "51.3 Celsius",
+        "billetTemperature": "-",
+        "numberOfBillet": "-"
+      },
+      "alarms": {
+        "active": 0,
+        "total": 0,
+        "list": []
+      },
+      "healthScore": 98,
+      "predictiveMaintenance": [],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Arrow indicator used for visual guidance, no mechanical parts.",
+        "why": "Not applicable",
+        "recommendedAction": "No maintenance required beyond visual inspection."
+      }
+    },
+    {
+      "id": "casting-machine",
+      "previewImage": "/3d-model/textures/casting-preview.jpg",
+      "title": "Casting Machine",
+      "machineId": "MCH-101-CM",
+      "PLC": "4",
+      "nodeRed": "1882",
+      "dateAdded": "February 2023",
+      "location": "Plant A - Bay 3",
+      "indicators": {
+        "airTemperature": "48.7 Celsius",
+        "billetTemperature": "820 Celsius",
+        "numberOfBillet": "12"
+      },
+      "alarms": {
+        "active": 2,
+        "total": 10,
+        "list": ["LSYS_Alarm_003", "CCS_Alarm_013"]
+      },
+      "healthScore": 56,
+      "predictiveMaintenance": [
+        {
+          "part": "Gear",
+          "predictive": "June 2024",
+          "last": "January 2024",
+          "health": 20,
+          "thumbnail": "/3d-model/textures/gear-thumb.jpg"
+        },
+        {
+          "part": "Pulley",
+          "predictive": "March 2024",
+          "last": "December 2023",
+          "health": 65,
+          "thumbnail": "/3d-model/textures/pulley-thumb.jpg"
+        }
+      ],
+      "prescriptiveMaintenance": {
+        "whatHappened": "The gear component shows a critical decline in condition reaching a 20% health score. Vibration amplitude increased and surface wear was detected.",
+        "why": "Excessive friction and prolonged operation under high torque load led to surface fatigue and micro-cracking.",
+        "recommendedAction": "Schedule predictive maintenance, perform targeted lubrication, and plan partial gear replacement if condition does not improve."
+      }
+    },
+    {
+      "id": "furnace",
+      "previewImage": "/3d-model/textures/furnace-preview.jpg",
+      "title": "Furnace",
+      "machineId": "MCH-102-FN",
+      "PLC": "2",
+      "nodeRed": "1890",
+      "dateAdded": "2024-06-15",
+      "location": "Furnace Hall",
+      "indicators": {
+        "airTemperature": "120.0 Celsius",
+        "billetTemperature": "1200 Celsius",
+        "numberOfBillet": "6"
+      },
+      "alarms": { "active": 1, "total": 4, "list": ["CM_Alarm_052"] },
+      "healthScore": 76,
+      "predictiveMaintenance": [
+        {
+          "part": "Platen",
+          "predictive": "March 2024",
+          "last": "December 2023",
+          "health": 80,
+          "thumbnail": "/3d-model/textures/platen-thumb.jpg"
+        }
+      ],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Elevated thermal stress detected in refractory lining, showing early signs of spalling.",
+        "why": "High temperature cycling and localized hot spots due to uneven heating.",
+        "recommendedAction": "Inspect refractory lining, perform targeted repairs and rebalance burners to even temperature distribution."
+      }
+    },
+    {
+      "id": "furnace2",
+      "previewImage": "/3d-model/textures/furnace-preview.jpg",
+      "title": "Furnace (2)",
+      "machineId": "MCH-102-FN-2",
+      "PLC": "2",
+      "nodeRed": "1891",
+      "dateAdded": "2024-06-20",
+      "location": "Furnace Hall",
+      "indicators": {
+        "airTemperature": "115.2 Celsius",
+        "billetTemperature": "1180 Celsius",
+        "numberOfBillet": "5"
+      },
+      "alarms": { "active": 0, "total": 2, "list": [] },
+      "healthScore": 82,
+      "predictiveMaintenance": [],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Minor irregular heating pattern.",
+        "why": "Partial burner inefficiency.",
+        "recommendedAction": "Schedule burner tune-up and sensor recalibration."
+      }
+    },
+    {
+      "id": "homogenizing",
+      "previewImage": "/3d-model/textures/homogenizing-preview.jpg",
+      "title": "Homogenizing",
+      "machineId": "MCH-103-HG",
+      "PLC": "5",
+      "nodeRed": "1884",
+      "dateAdded": "2023-02-01",
+      "location": "Line B",
+      "indicators": {
+        "airTemperature": "51.3 Celsius",
+        "billetTemperature": "-",
+        "numberOfBillet": "-"
+      },
+      "alarms": {
+        "active": 3,
+        "total": 34,
+        "list": ["LSYS_Alarm_003", "CCS_Alarm_013", "CM_Alarm_052"]
+      },
+      "healthScore": 56,
+      "predictiveMaintenance": [
+        {
+          "part": "Valve",
+          "predictive": "March 2024",
+          "last": "December 2023",
+          "health": 43,
+          "thumbnail": "/3d-model/textures/valve-thumb.jpg"
+        },
+        {
+          "part": "Podpora",
+          "predictive": "June 2024",
+          "last": "January 2024",
+          "health": 68,
+          "thumbnail": "/3d-model/textures/podpora-thumb.jpg"
+        }
+      ],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Abrupt decline in condition for the homogenizing gear assembly.",
+        "why": "Contaminants and insufficient lubrication increasing wear.",
+        "recommendedAction": "Perform immediate maintenance, replenish lubrication, and inspect alignment of mating components."
+      }
+    },
+    {
+      "id": "launder",
+      "previewImage": "/3d-model/textures/launder-preview.jpg",
+      "title": "Launder",
+      "machineId": "MCH-104-LD",
+      "PLC": "3",
+      "nodeRed": "1886",
+      "dateAdded": "2023-05-12",
+      "location": "Line C",
+      "indicators": {
+        "airTemperature": "45.0 Celsius",
+        "billetTemperature": "-",
+        "numberOfBillet": "-"
+      },
+      "alarms": { "active": 0, "total": 5, "list": [] },
+      "healthScore": 88,
+      "predictiveMaintenance": [],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Normal operation.",
+        "why": "No notable degradation.",
+        "recommendedAction": "Routine inspection."
+      }
+    },
+    {
+      "id": "rod-feeder",
+      "previewImage": "/3d-model/textures/rod-feeder-preview.jpg",
+      "title": "Rod Feeder",
+      "machineId": "MCH-105-RF",
+      "PLC": "6",
+      "nodeRed": "1892",
+      "dateAdded": "2024-03-10",
+      "location": "Feeder Bay",
+      "indicators": {
+        "airTemperature": "37.8 Celsius",
+        "billetTemperature": "-",
+        "numberOfBillet": "-"
+      },
+      "alarms": { "active": 1, "total": 3, "list": ["CM_Alarm_020"] },
+      "healthScore": 70,
+      "predictiveMaintenance": [
+        {
+          "part": "Feed Roller",
+          "predictive": "April 2024",
+          "last": "January 2024",
+          "health": 60,
+          "thumbnail": "/3d-model/textures/roller-thumb.jpg"
+        }
+      ],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Minor slip detected in feed roller.",
+        "why": "Worn friction surface.",
+        "recommendedAction": "Replace or resurface roller and verify tensions."
+      }
+    },
+    {
+      "id": "sir",
+      "previewImage": "/3d-model/textures/sir-preview.jpg",
+      "title": "SIR Machine",
+      "machineId": "MCH-106-SR",
+      "PLC": "7",
+      "nodeRed": "1900",
+      "dateAdded": "2024-07-01",
+      "location": "SIR Bay",
+      "indicators": {
+        "airTemperature": "40.2 Celsius",
+        "billetTemperature": "-",
+        "numberOfBillet": "-"
+      },
+      "alarms": { "active": 0, "total": 1, "list": [] },
+      "healthScore": 90,
+      "predictiveMaintenance": [],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Operational within normal limits.",
+        "why": "No issues.",
+        "recommendedAction": "Continue monitoring."
+      }
+    },
+    {
+      "id": "ut",
+      "previewImage": "/3d-model/textures/ut-preview.jpg",
+      "title": "UT Machine",
+      "machineId": "MCH-107-UT",
+      "PLC": "8",
+      "nodeRed": "1901",
+      "dateAdded": "2024-08-12",
+      "location": "Inspection Bay",
+      "indicators": {
+        "airTemperature": "39.0 Celsius",
+        "billetTemperature": "-",
+        "numberOfBillet": "-"
+      },
+      "alarms": { "active": 0, "total": 0, "list": [] },
+      "healthScore": 95,
+      "predictiveMaintenance": [],
+      "prescriptiveMaintenance": {
+        "whatHappened": "Routine inspection machine.",
+        "why": "No degradation.",
+        "recommendedAction": "No action required."
+      }
+    }
+  ]
+}
