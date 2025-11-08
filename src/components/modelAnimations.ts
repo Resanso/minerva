@@ -6,40 +6,6 @@ export type ModelAnimation = {
 };
 
 /**
- * Create a left-right ping-pong animation for an object.
- * obj.position.x will be updated each frame.
- */
-export function createLeftRightAnimation(
-  obj: THREE.Object3D,
-  opts?: {
-    baseX?: number;
-    amplitude?: number;
-    period?: number;
-  }
-): ModelAnimation {
-  const baseX =
-    typeof opts?.baseX === "number" ? opts!.baseX! : obj.position.x || 0;
-  const amplitude = opts?.amplitude ?? 1.2;
-  const period = opts?.period ?? 1.4;
-
-  return {
-    update(elapsed: number) {
-      try {
-        const phase = (elapsed % period) / period; // 0..1
-        const ping = Math.abs(phase * 2 - 1); // 0..1..0
-        const x = baseX - amplitude + ping * (2 * amplitude);
-        obj.position.x = x;
-      } catch (e) {
-        // ignore per-frame errors
-      }
-    },
-    dispose() {
-      // nothing to dispose for this simple animation
-    },
-  };
-}
-
-/**
  * Create an animation where the object fades in (opacity 0->1) while moving to the right.
  * The object will move from (baseX) to (baseX + distance) over `duration` seconds and then loop.
  * This clones mesh materials to make them transparent; dispose() will free cloned materials.

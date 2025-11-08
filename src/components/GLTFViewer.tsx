@@ -6,11 +6,11 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import {
-  createLeftRightAnimation,
   createFadeInMoveRightAnimation,
   ModelAnimation,
 } from "./modelAnimations";
 import { createViewerControls, ViewerControlsAPI } from "./ViewerControls";
+import { mountModelModal, unmountModelModal } from "./ModelModal";
 
 type ModelItem = {
   id: string; // unique identifier for the model
@@ -118,7 +118,7 @@ export default function GLTFViewer({
 
     const loader = new GLTFLoader();
     const texLoader = new THREE.TextureLoader();
-    const perModelTextures = new Map<string, THREE.Texture>();
+    let modalMounted = false;
 
     // track loaded objects, materials and textures for cleanup
     const objects = new Map<string, THREE.Object3D>();
@@ -131,6 +131,36 @@ export default function GLTFViewer({
       getObjects: () => Array.from(objects.values()),
       camera,
       domElement: renderer.domElement,
+      onSelect: ({ object, meta }) => {
+        try {
+          const id = object.userData?.modelId || object.name || "(unknown)";
+          const description = meta?.description ?? object.userData?.description;
+          const snapshot = object.clone(true);
+          mountModelModal({
+            id,
+            position: object.position.clone(),
+            rotation: object.rotation.clone(),
+            scale: object.scale.clone(),
+            description,
+            objectSnapshot: snapshot,
+            onClose: () => {
+              modalMounted = false;
+            },
+          });
+          modalMounted = true;
+        } catch (err) {
+          console.error("Failed to mount model modal", err);
+        }
+      },
+      onDeselect: () => {
+        if (!modalMounted) return;
+        try {
+          unmountModelModal();
+        } catch (err) {
+          console.error("Failed to unmount model modal", err);
+        }
+        modalMounted = false;
+      },
     });
 
     // helper to apply a texture to a mesh and clone materials safely
@@ -240,7 +270,6 @@ export default function GLTFViewer({
         "casting-machine.glb",
         "furnace.glb",
         "homogenizing.glb",
-        "launder.glb",
         "rod-feeder.glb",
         "sir.glb",
         "ut.glb",
@@ -264,8 +293,6 @@ export default function GLTFViewer({
     };
 
     // map to track model src used for an id to detect re-loads
-    const modelSrcMap = new Map<string, string>();
-
     const updateModels = (items: ModelItem[]) => {
       const incomingIds = new Set(items.map((m) => m.id));
 
@@ -290,7 +317,6 @@ export default function GLTFViewer({
             }
           });
           objects.delete(id);
-          modelSrcMap.delete(id);
         }
       }
 
@@ -360,10 +386,6 @@ export default function GLTFViewer({
               const bbox = new THREE.Box3().setFromObject(obj);
               const minY = bbox.min.y;
               // if the object's min Y is below 0, lift it up so it rests on the floor
-              if (minY < 0) {
-                const lift = -minY + 0.001; // small epsilon to avoid z-fighting
-                obj.position.y += lift;
-              }
             } catch (e) {
               // ignore bbox errors
             }
@@ -393,7 +415,6 @@ export default function GLTFViewer({
 
             scene.add(obj);
             objects.set(m.id, obj);
-            modelSrcMap.set(m.id, m.src);
             // record model id and available animation clips for selection UI
             try {
               obj.userData = obj.userData || {};
@@ -424,7 +445,6 @@ export default function GLTFViewer({
                         THREE.LinearMipmapLinearFilter;
                       t.magFilter = THREE.LinearFilter;
                       t.needsUpdate = true;
-                      perModelTextures.set(m.id, t);
                       appliedTextures.push(t);
                       obj.traverse((child: any) => {
                         if (child.isMesh) applyTextureToMesh(child, t);

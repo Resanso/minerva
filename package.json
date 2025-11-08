@@ -8,9 +8,12 @@
     "start": "next start"
   },
   "dependencies": {
+    "@heroui/modal": "^2.2.24",
+    "@heroui/react": "^2.8.5",
     "next": "15.5.5",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "framer-motion": "^11.11.9",
     "three": "^0.180.0"
   },
   "devDependencies": {

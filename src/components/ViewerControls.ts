@@ -18,6 +18,8 @@ export function createViewerControls(
     getObjects?: () => THREE.Object3D[];
     camera?: THREE.Camera;
     domElement?: HTMLElement;
+    onSelect?: (info: { object: THREE.Object3D; meta?: any }) => void;
+    onDeselect?: () => void;
   }
 ): ViewerControlsAPI {
   const panel = document.createElement("div");
@@ -69,7 +71,7 @@ export function createViewerControls(
   const dom = deps?.domElement;
   const camera = deps?.camera;
   const getObjects = deps?.getObjects;
-  const onPointerDown = (e: PointerEvent) => {
+  const onPointerInteract = (e: PointerEvent) => {
     try {
       if (!dom || !camera || !getObjects) return;
       const rect = dom.getBoundingClientRect();
@@ -91,7 +93,7 @@ export function createViewerControls(
       /* ignore */
     }
   };
-  if (dom) dom.addEventListener("pointerdown", onPointerDown as any);
+  if (dom) dom.addEventListener("pointerup", onPointerInteract as any);
 
   const colorCbs: Array<(c: string) => void> = [];
   const scaleCbs: Array<(s: number) => void> = [];
@@ -185,7 +187,16 @@ export function createViewerControls(
         clips.map((c) => `<option value=\"${c}\">${c}</option>`).join("");
     } catch (e) {}
 
-    // show modal with basic info for the selected model
+    if (deps?.onSelect) {
+      try {
+        deps.onSelect({ object: obj, meta });
+      } catch (err) {
+        console.error("ViewerControls onSelect handler failed", err);
+      }
+      return;
+    }
+
+    // show modal with basic info for the selected model when no custom handler provided
     try {
       showModalForObject(obj, meta);
     } catch (e) {
@@ -196,6 +207,14 @@ export function createViewerControls(
   function hide() {
     panel.style.display = "none";
     currentObj = null;
+    if (deps?.onDeselect) {
+      try {
+        deps.onDeselect();
+      } catch (err) {
+        console.error("ViewerControls onDeselect handler failed", err);
+      }
+      return;
+    }
     try {
       hideModal();
     } catch (e) {
@@ -210,13 +229,21 @@ export function createViewerControls(
       /* ignore */
     }
     try {
-      if (dom) dom.removeEventListener("pointerdown", onPointerDown as any);
+      if (dom) dom.removeEventListener("pointerup", onPointerInteract as any);
     } catch (e) {
       /* ignore */
     }
-    try {
-      hideModal();
-    } catch (e) {}
+    if (deps?.onDeselect) {
+      try {
+        deps.onDeselect();
+      } catch (err) {
+        console.error("ViewerControls dispose onDeselect failed", err);
+      }
+    } else {
+      try {
+        hideModal();
+      } catch (e) {}
+    }
   }
 
   // --- modal implementation ---
@@ -238,6 +265,7 @@ export function createViewerControls(
         rotation: rot,
         scale: sc,
         description: meta?.description,
+        objectSnapshot: obj.clone(true),
         onClose: () => {
           mounted = false;
         },

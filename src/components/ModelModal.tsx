@@ -1,568 +1,677 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import * as THREE from "three";
-import { createRoot, Root } from "react-dom/client";
+import type { Euler, Vector3 } from "three";
+import {
+  Button,
+  HeroUIProvider,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@heroui/react";
 
-type ModalProps = {
+// --- Fungsi Helper Baru untuk Warna Health Score ---
+/**
+ * Mendapatkan kelas Tailwind untuk warna UI berdasarkan skor kesehatan.
+ * @param health - Skor kesehatan (0-100)
+ */
+const getHealthColorClasses = (health: number) => {
+  // 20% = Merah
+  if (health <= 20) {
+    return {
+      bg: "bg-red-500/10",
+      text: "text-red-500",
+      border: "border-red-500/30",
+      badge: "bg-red-500",
+    };
+  }
+  // 43%, 55% = Kuning
+  if (health <= 55) {
+    return {
+      bg: "bg-yellow-500/10",
+      text: "text-yellow-500",
+      border: "border-yellow-500/30",
+      badge: "bg-yellow-500",
+    };
+  }
+  // 68%, 76%, 90% = Hijau
+  return {
+    bg: "bg-green-500/10",
+    text: "text-green-500",
+    border: "border-green-500/30",
+    badge: "bg-green-500",
+  };
+};
+
+type ModelModalOptions = {
   id: string;
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number };
-  scale: { x: number; y: number; z: number };
+  position?: Vector3;
+  rotation?: Euler;
+  scale?: Vector3;
   description?: string;
+  objectSnapshot?: THREE.Object3D;
   onClose?: () => void;
 };
 
-// Small, local shadcn-like primitives (fallback) so the modal looks consistent even when
-// the project's shadcn UI components are not installed. If you already have shadcn UI,
-// replace these with imports from your ui library.
-function Dialog({
-  children,
-  open,
-}: {
-  children: React.ReactNode;
-  open: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2000 }}>{children}</div>
-  );
-}
-function DialogOverlay({ onClick }: { onClick?: () => void }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" }}
-    />
-  );
-}
-function DialogContent({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: "50%",
-        top: "50%",
-        transform: "translate(-50%, -50%)",
-        minWidth: 320,
-        maxWidth: "90%",
-        background: "#0f1724",
-        color: "#fff",
-        padding: 16,
-        borderRadius: 10,
-        boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
-        display: "flex",
-        flexDirection: "column",
-        // limit height and allow internal scrolling
-        maxHeight: "80vh",
-        overflow: "hidden",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
+type MachineIndicators = Record<string, string>;
 
-function DialogHeader({
-  title,
-  onClose,
-}: {
-  title: string;
-  onClose?: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 8,
-      }}
-    >
-      <div style={{ fontWeight: 700 }}>{title}</div>
-      {onClose ? (
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "#fff",
-            cursor: "pointer",
-            fontSize: 18,
-          }}
-        >
-          ✕
-        </button>
-      ) : null}
-    </div>
-  );
-}
+type MachineAlarms = {
+  active: number;
+  total: number;
+  list: string[];
+};
 
-export function ModelModal({
-  id,
-  position,
-  rotation,
-  scale,
-  description,
-  onClose,
-}: ModalProps) {
-  const [record, setRecord] = useState<any | null>(null);
-  const previewRef = useRef<HTMLDivElement | null>(null);
-  const threeState = useRef<any>({});
-  const resizeHandlerRef = useRef<((...args: any[]) => any) | null>(null);
+type PredictiveMaintenanceEntry = {
+  part: string;
+  predictive: string;
+  last: string;
+  health: number;
+  thumbnail?: string;
+};
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch("/3d-model/modal-data.json");
-        if (!res.ok) return;
-        const json = await res.json();
-        const found = json?.machines?.find((m: any) => m.id === id) || null;
-        if (mounted) setRecord(found);
-      } catch (e) {
-        // ignore fetch errors and keep record null
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [id]);
+type PrescriptiveMaintenanceEntry = {
+  whatHappened: string;
+  why: string;
+  recommendedAction: string;
+};
 
-  useEffect(() => {
-    // attempt to load the 3d model specified in /3d-model/models.json for preview
-    let mounted = true;
-    let raf = 0;
-    (async () => {
-      try {
-        const mres = await fetch("/3d-model/models.json");
-        if (!mres.ok) return;
-        const mjson = await mres.json();
-        const modelEntry = mjson.find((x: any) => x.id === id) || null;
-        if (!modelEntry || !mounted || !previewRef.current) return;
-
-        const container = previewRef.current;
-        // dynamic imports for three extras
-        const THREE = await import("three");
-        const { GLTFLoader } = await import(
-          "three/examples/jsm/loaders/GLTFLoader"
-        );
-
-        const scene = new THREE.Scene();
-        const renderer = new THREE.WebGLRenderer({
-          antialias: true,
-          alpha: true,
-        });
-        renderer.setPixelRatio(window.devicePixelRatio || 1);
-        renderer.setSize(container.clientWidth, container.clientHeight);
-        container.innerHTML = "";
-        container.appendChild(renderer.domElement);
-
-        const camera = new THREE.PerspectiveCamera(
-          45,
-          container.clientWidth / container.clientHeight,
-          0.1,
-          1000
-        );
-        camera.position.set(0, 0.5, 2.2);
-
-        const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-        scene.add(light);
-
-        const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-        dir.position.set(5, 10, 7.5);
-        scene.add(dir);
-
-        const loader = new GLTFLoader();
-        const gltf = await new Promise<any>((resolve, reject) => {
-          loader.load(modelEntry.src, resolve, undefined, reject);
-        });
-
-        const obj = gltf.scene || gltf.scenes?.[0] || gltf;
-        // normalize scale
-        const box = new THREE.Box3().setFromObject(obj);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        const scaleFactor = (1.0 / maxDim) * (modelEntry.scale || 1);
-        obj.scale.setScalar(scaleFactor);
-        obj.position.set(0, -size.y * 0.5 * scaleFactor, 0);
-        scene.add(obj);
-
-        threeState.current = { scene, renderer, camera, obj };
-
-        // declare onResize so we can remove it during cleanup
-        const onResize = () => {
-          if (!container) return;
-          const w = container.clientWidth;
-          const h = container.clientHeight;
-          camera.aspect = w / h;
-          camera.updateProjectionMatrix();
-          renderer.setSize(w, h);
-        };
-        // store reference so cleanup can remove it
-        resizeHandlerRef.current = onResize;
-        window.addEventListener("resize", onResize);
-
-        const animate = () => {
-          obj.rotation.y += 0.01;
-          renderer.render(scene, camera);
-          raf = requestAnimationFrame(animate);
-        };
-        animate();
-      } catch (e) {
-        // ignore preview failures
-      }
-    })();
-
-    return () => {
-      mounted = false;
-      try {
-        if (threeState.current?.renderer) {
-          if (threeState.current.obj)
-            threeState.current.scene.remove(threeState.current.obj);
-          threeState.current.renderer.dispose();
-          const dom = threeState.current.renderer.domElement;
-          dom?.remove();
-          try {
-            if (resizeHandlerRef.current) {
-              window.removeEventListener(
-                "resize",
-                resizeHandlerRef.current as any
-              );
-              resizeHandlerRef.current = null;
-            }
-          } catch (e) {}
-        }
-      } catch (e) {}
-      cancelAnimationFrame(raf);
-    };
-  }, [id]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose?.();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <Dialog open={true}>
-      <DialogOverlay onClick={onClose} />
-      <DialogContent>
-        <DialogHeader title={`Model: ${id}`} onClose={onClose} />
-
-        {/* scrollable body */}
-        <div style={{ overflowY: "auto", paddingRight: 8 }}>
-          {/* two column grid: left metadata/thumb, right details */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "260px 1fr",
-              gap: 16,
-              fontSize: 13,
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div
-                ref={previewRef}
-                style={{
-                  height: 180,
-                  borderRadius: 8,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#9ca3af",
-                  border: "1px solid rgba(255,255,255,0.04)",
-                  overflow: "hidden",
-                  background: "#071024",
-                }}
-              >
-                <div style={{ padding: 8 }}>3D Preview</div>
-              </div>
-
-              <div style={{ display: "grid", gap: 8 }}>
-                <div
-                  style={{
-                    background: "#071024",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                    Machine ID
-                  </div>
-                  <div style={{ fontWeight: 700 }}>
-                    {record?.machineId || id}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "#071024",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>PLC</div>
-                  <div>{record?.PLC ?? "—"}</div>
-                </div>
-                <div
-                  style={{
-                    background: "#071024",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                    Date Added
-                  </div>
-                  <div>
-                    {record?.dateAdded ?? new Date().toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {/* indicators row */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3,1fr)",
-                  gap: 8,
-                }}
-              >
-                <div
-                  style={{
-                    background: "#06202a",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                    Air Temperature
-                  </div>
-                  <div style={{ fontWeight: 700 }}>
-                    {record?.indicators?.airTemperature ?? "—"}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "#06202a",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                    Billet Temperature
-                  </div>
-                  <div style={{ fontWeight: 700 }}>
-                    {record?.indicators?.billetTemperature ?? "—"}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "#06202a",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                    Number of Billet
-                  </div>
-                  <div style={{ fontWeight: 700 }}>
-                    {record?.indicators?.numberOfBillet ?? "—"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Alarms box */}
-              <div
-                style={{ background: "#071024", padding: 12, borderRadius: 8 }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <div style={{ fontWeight: 700 }}>Alarms</div>
-                  <div
-                    style={{
-                      background: "#dc2626",
-                      color: "#fff",
-                      padding: "4px 8px",
-                      borderRadius: 999,
-                    }}
-                  >
-                    {record?.alarms?.active ?? 0} Active
-                  </div>
-                </div>
-                <div style={{ marginTop: 8, color: "#9ca3af" }}>
-                  {record?.alarms?.list && record.alarms.list.length
-                    ? record.alarms.list.join(", ")
-                    : "No active alarms."}
-                </div>
-              </div>
-
-              {/* Predictive maintenance - small cards grid */}
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                  Predictive Maintenance
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))",
-                    gap: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#071024",
-                      padding: 8,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>Gear</div>
-                    <div style={{ fontWeight: 700 }}>
-                      {record?.predictiveMaintenance?.[0]?.health ?? "-"}%
-                      Health
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      background: "#071024",
-                      padding: 8,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>Pulley</div>
-                    <div style={{ fontWeight: 700 }}>
-                      {record?.predictiveMaintenance?.[1]?.health ?? "-"}%
-                      Health
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Prescriptive maintenance */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 8,
-                }}
-              >
-                <div
-                  style={{
-                    background: "#071024",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                    What Happened?
-                  </div>
-                  <div style={{ color: "#9ca3af", fontSize: 13 }}>
-                    {record?.prescriptiveMaintenance?.whatHappened ??
-                      description ??
-                      "The component shows degradation and increased vibration."}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "#071024",
-                    padding: 10,
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                    Why / How It Happened?
-                  </div>
-                  <div style={{ color: "#9ca3af", fontSize: 13 }}>
-                    {record?.prescriptiveMaintenance?.why ??
-                      "Mechanical wear from prolonged operation under heavy load."}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* footer - always visible */}
-        <div
-          style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              background: "#111827",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.06)",
-            }}
-          >
-            Close
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-let modalRoot: HTMLDivElement | null = null;
-let reactRoot: Root | null = null;
-
-export function mountModelModal(props: {
+type MachineDetails = {
   id: string;
-  position: THREE.Vector3;
-  rotation: THREE.Euler;
-  scale: THREE.Vector3;
-  description?: string;
-  onClose?: () => void;
-}) {
-  if (typeof document === "undefined") return;
-  if (!modalRoot) {
-    modalRoot = document.createElement("div");
-    document.body.appendChild(modalRoot);
-    reactRoot = createRoot(modalRoot);
+  previewImage: string;
+  title: string;
+  machineId: string;
+  PLC: string;
+  nodeRed: string;
+  dateAdded: string;
+  location: string;
+  indicators: MachineIndicators;
+  alarms: MachineAlarms;
+  predictiveMaintenance: PredictiveMaintenanceEntry[];
+  healthScore: number;
+  prescriptiveMaintenance?: PrescriptiveMaintenanceEntry;
+};
+
+type MachinesPayload = {
+  machines?: MachineDetails[];
+};
+
+async function loadMachines(): Promise<MachineDetails[]> {
+  const response = await fetch("/3d-model/modal-data.json", {
+    cache: "no-store",
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(response.statusText);
   }
-  reactRoot!.render(
-    <ModelModal
-      id={props.id}
-      position={{
-        x: props.position.x,
-        y: props.position.y,
-        z: props.position.z,
-      }}
-      rotation={{
-        x: props.rotation.x,
-        y: props.rotation.y,
-        z: props.rotation.z,
-      }}
-      scale={{ x: props.scale.x, y: props.scale.y, z: props.scale.z }}
-      description={props.description}
-      onClose={() => {
-        unmountModelModal();
-        props.onClose && props.onClose();
-      }}
-    />
+  const json: MachinesPayload = await response.json();
+  const list = Array.isArray(json?.machines) ? json.machines : [];
+  return list.map((item) => {
+    const predictive = Array.isArray(item.predictiveMaintenance)
+      ? item.predictiveMaintenance
+      : [];
+    const health = typeof item.healthScore === "number" ? item.healthScore : 0;
+    const prescriptive =
+      item &&
+      typeof item === "object" &&
+      item.prescriptiveMaintenance &&
+      typeof item.prescriptiveMaintenance === "object"
+        ? item.prescriptiveMaintenance
+        : {
+            whatHappened: "-",
+            why: "-",
+            recommendedAction: "-",
+          };
+    return {
+      ...item,
+      predictiveMaintenance: predictive,
+      healthScore: health,
+      prescriptiveMaintenance: prescriptive,
+    };
+  });
+}
+
+async function loadMachineById(id: string): Promise<MachineDetails | null> {
+  try {
+    const machines = await loadMachines();
+    return machines.find((item) => item.id === id) ?? null;
+  } catch (error) {
+    console.error("Failed to load machine metadata", error);
+    return null;
+  }
+}
+
+// Fungsi formatVector dan formatRotation tidak diubah,
+// meskipun UI baru tidak menampilkannya.
+function formatVector(vec?: Vector3, fractionDigits = 2) {
+  if (!vec) return "N/A";
+  const factor = Math.pow(10, fractionDigits);
+  const values = vec.toArray();
+  return values.map((v) => Math.round(v * factor) / factor).join(", ");
+}
+
+function formatRotation(euler?: Euler, fractionDigits = 1) {
+  if (!euler) return "N/A";
+  const factor = Math.pow(10, fractionDigits);
+  const toDegrees = (r: number) => (r * 180) / Math.PI;
+  return [euler.x, euler.y, euler.z]
+    .map((v) => Math.round(toDegrees(v) * factor) / factor)
+    .map((v) => `${v} deg`)
+    .join(", ");
+}
+
+function ModelModal(props: ModelModalOptions) {
+  const {
+    id,
+    position,
+    rotation,
+    scale,
+    description,
+    objectSnapshot,
+    onClose,
+  } = props;
+  const [isOpen, setIsOpen] = useState(true);
+  const hasClosedRef = useRef(false);
+  const previewHostRef = useRef<HTMLDivElement | null>(null);
+  const [machine, setMachine] = useState<MachineDetails | null>(null);
+  const [machineLoading, setMachineLoading] = useState(true);
+
+  // Memo ini tidak lagi digunakan di UI baru, tapi kita biarkan
+  const positionLabel = useMemo(() => formatVector(position, 3), [position]);
+  const scaleLabel = useMemo(() => formatVector(scale, 2), [scale]);
+  const rotationLabel = useMemo(() => formatRotation(rotation, 1), [rotation]);
+
+  const maintenanceItems = machine?.predictiveMaintenance ?? [];
+  const maintenanceCount = maintenanceItems.length;
+  const prescriptive = machine?.prescriptiveMaintenance;
+
+  useEffect(() => {
+    let isMounted = true;
+    setMachineLoading(true);
+    loadMachineById(id).then((result) => {
+      if (!isMounted) return;
+      setMachine(result);
+      setMachineLoading(false);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    const host = previewHostRef.current;
+    if (!host || !objectSnapshot) return;
+
+    // clear any previous canvas
+    host.innerHTML = "";
+
+    const width = host.clientWidth || 240;
+    const height = host.clientHeight || 256; // Sesuaikan tinggi default
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a); // Latar belakang canvas
+
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(width, height);
+    host.appendChild(renderer.domElement);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+    const directional = new THREE.DirectionalLight(0xffffff, 0.6);
+    directional.position.set(3, 4, 6);
+    scene.add(ambient);
+    scene.add(directional);
+
+    const previewObject = objectSnapshot.clone(true);
+
+    const box = new THREE.Box3().setFromObject(previewObject);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    previewObject.position.sub(center);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 0) {
+      const desired = 1.8;
+      const scaleFactor = desired / maxDim;
+      previewObject.scale.multiplyScalar(scaleFactor);
+    }
+    scene.add(previewObject);
+
+    const fov = (camera.fov * Math.PI) / 180;
+    const distance = maxDim > 0 ? (maxDim / (2 * Math.tan(fov / 2))) * 2.2 : 3;
+    camera.position.set(0, 0, distance);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+    let frameId = 0;
+    const animate = () => {
+      frameId = requestAnimationFrame(animate);
+      previewObject.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            const newWidth = host.clientWidth || width;
+            const newHeight = host.clientHeight || height;
+            camera.aspect = newWidth / newHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(newWidth, newHeight);
+          })
+        : null;
+    if (resizeObserver) resizeObserver.observe(host);
+
+    return () => {
+      if (resizeObserver) resizeObserver.disconnect();
+      cancelAnimationFrame(frameId);
+      renderer.dispose();
+      host.innerHTML = "";
+    };
+  }, [objectSnapshot, id]);
+
+  useEffect(() => {
+    if (!isOpen && !hasClosedRef.current) {
+      hasClosedRef.current = true;
+      try {
+        onClose?.();
+      } catch (err) {
+        console.error("ModelModal onClose handler failed", err);
+      }
+      const detach = () => unmountModelModal();
+      if (typeof window !== "undefined" && window.requestAnimationFrame) {
+        window.requestAnimationFrame(detach);
+      } else {
+        detach();
+      }
+    }
+  }, [isOpen, onClose]);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      size="5xl"
+      onOpenChange={(open) => setIsOpen(open)}
+      scrollBehavior="inside"
+      backdrop="blur"
+      placement="center"
+    >
+      <ModalContent className="bg-[#0F172A] text-white">
+        {(close) => (
+          <>
+            <ModalHeader className="border-b border-white/10">
+              <h3 className="text-lg font-semibold text-white">
+                {machine?.title ?? description ?? id}
+              </h3>
+            </ModalHeader>
+
+            <ModalBody className="p-6 space-y-6">
+              {/* --- BAGIAN ATAS (Info & Status) --- */}
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                {/* --- Kolom Kiri --- */}
+                <div className="flex flex-col gap-6 lg:col-span-4">
+                  {/* Kartu 3D Preview */}
+                  <section className="rounded-lg bg-[#1E293B] p-4">
+                    <div
+                      className="relative w-full h-64 overflow-hidden rounded-md bg-[#0F172A]"
+                      ref={previewHostRef}
+                    >
+                      {!objectSnapshot && (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                          3D preview unavailable
+                        </div>
+                      )}
+                      {/* Canvas Three.js akan dimuat di sini */}
+                    </div>
+                  </section>
+
+                  {/* Kartu Machine Info */}
+                  <section className="rounded-lg bg-[#1E293B] p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0 w-3 h-3 rounded-full bg-blue-500"></div>
+                      <h4 className="text-base font-semibold text-white">
+                        {machine?.title ?? description ?? id}
+                      </h4>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-400">Machine ID</p>
+                        <p className="text-white font-medium">
+                          {machine?.machineId ?? "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">PLC</p>
+                        <p className="text-white font-medium">
+                          {machine?.PLC ?? "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">NodeRed</p>
+                        <p className="text-white font-medium">
+                          {machine?.nodeRed ?? "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Date Add</p>
+                        <p className="text-white font-medium">
+                          {machine?.dateAdded ?? "-"}
+                        </p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs text-gray-400">Location</p>
+                        <p className="text-white font-medium">
+                          {machine?.location ?? "-"}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                {/* --- Kolom Kanan --- */}
+                <div className="flex flex-col gap-6 lg:col-span-8">
+                  {/* Kartu Indicators */}
+                  <section className="rounded-lg bg-[#1E293B] p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 w-3 h-3 rounded-full bg-blue-500"></div>
+                        <h4 className="text-base font-semibold text-white">
+                          {machine?.title ?? "Indicators"}
+                        </h4>
+                      </div>
+                      <Button
+                        size="sm"
+                        color="danger"
+                        variant="solid"
+                        className="rounded-full !bg-red-600"
+                      >
+                        Trouble
+                      </Button>
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      {machine?.indicators ? (
+                        Object.entries(machine.indicators).map(
+                          ([key, value]) => (
+                            <div
+                              key={key}
+                              className="rounded-lg bg-[#0F172A] p-3"
+                            >
+                              <p className="flex items-center gap-2 text-xs text-gray-400">
+                                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                {key}
+                              </p>
+                              <p className="mt-1 text-lg font-semibold text-white">
+                                {value ?? "-"}
+                              </p>
+                            </div>
+                          )
+                        )
+                      ) : (
+                        <p className="text-gray-400 col-span-3">
+                          No indicator data.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Kartu Alarms */}
+                  <section className="rounded-lg bg-[#1E293B] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 w-3 h-3 rounded-full bg-red-500"></div>
+                        <h4 className="text-base font-semibold text-white">
+                          Homogenizing Alarms
+                        </h4>
+                        <span className="text-sm text-red-500">
+                          {machine?.alarms?.active ?? 0} Active
+                        </span>
+                        <span className="text-sm text-gray-400">
+                          ({machine?.alarms?.total ?? 0} total)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs text-gray-500">
+                          Last update: 10:42:19 PM
+                        </span>
+                        <Button
+                          size="sm"
+                          color="primary"
+                          variant="solid"
+                          className="rounded-md"
+                        >
+                          Show All
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {machine?.alarms?.list &&
+                      machine.alarms.list.length > 0 ? (
+                        machine.alarms.list.slice(0, 5).map((alarm, index) => (
+                          <div
+                            key={alarm}
+                            className="rounded-lg bg-[#0F172A] p-3 flex items-center gap-3"
+                          >
+                            <span
+                              className={`w-3 h-3 rounded-full ${
+                                index < (machine?.alarms?.active ?? 0)
+                                  ? "bg-green-500" // Aktif
+                                  : "bg-gray-500" // Tidak Aktif
+                              }`}
+                            ></span>
+                            <p className="text-sm font-medium text-white">
+                              {alarm}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-gray-400">No alarms registered.</p>
+                      )}
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              {/* --- BAGIAN PREDICTIVE MAINTENANCE --- */}
+              <section className="rounded-lg bg-[#1E293B] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-base font-semibold text-white">
+                      Predictive Maintenance
+                    </h4>
+                    <p className="text-sm text-gray-400">
+                      {machine?.title ?? id}
+                      {maintenanceCount ? (
+                        <span className="ml-2">({maintenanceCount} total)</span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {typeof machine?.healthScore === "number" && (
+                      <span
+                        className={`inline-flex items-center rounded-md px-3 py-1 text-sm font-semibold ${
+                          getHealthColorClasses(machine.healthScore).badge
+                        } bg-opacity-80 text-white`}
+                      >
+                        {machine.healthScore}%
+                        <span className="ml-2 font-normal opacity-80">
+                          Health Score
+                        </span>
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      color="primary"
+                      variant="solid"
+                      className="rounded-md"
+                    >
+                      Show All
+                    </Button>
+                  </div>
+                </div>
+
+                {maintenanceCount > 0 ? (
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {maintenanceItems.map((item) => {
+                      const healthColors = getHealthColorClasses(item.health);
+                      return (
+                        <article
+                          key={item.part}
+                          className={`flex flex-col justify-between rounded-lg bg-[#0F172A] p-4 border ${healthColors.border} ${healthColors.bg}`}
+                        >
+                          <div>
+                            <div className="flex items-start gap-4">
+                              {item.thumbnail ? (
+                                <img
+                                  src={item.thumbnail}
+                                  alt={`${item.part} thumbnail`}
+                                  className="h-20 w-20 rounded-lg object-contain bg-white/5 p-1"
+                                />
+                              ) : (
+                                <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-white/5 text-[11px] text-gray-400">
+                                  No image
+                                </div>
+                              )}
+                              <div className="flex-1 space-y-1">
+                                <p className="text-base font-semibold text-white">
+                                  {item.part}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  Predictive: {item.predictive || "-"}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Last: {item.last || "-"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between">
+                            <Button
+                              size="sm"
+                              variant="solid"
+                              color="primary"
+                              className="rounded-md"
+                            >
+                              Detail
+                            </Button>
+                            <span
+                              className={`rounded-md px-3 py-1 text-sm font-semibold ${healthColors.badge} bg-opacity-80 text-white`}
+                            >
+                              {item.health}%
+                              <span className="ml-1.5 font-normal opacity-80">
+                                Health Score
+                              </span>
+                            </span>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-gray-400">
+                    No predictive maintenance records available.
+                  </p>
+                )}
+              </section>
+
+              {/* --- BAGIAN PRESCRIPTIVE ANALYSIS --- */}
+              <section className="rounded-lg bg-[#1E293B] p-4">
+                <h4 className="text-base font-semibold text-white">
+                  Prescriptive Analysis
+                </h4>
+
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* What Happened */}
+                  <article className="rounded-lg bg-[#0F172A] p-4">
+                    <h5 className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                      What Happened?
+                    </h5>
+                    <p className="mt-3 text-sm text-gray-300 leading-relaxed">
+                      {prescriptive?.whatHappened ?? "-"}
+                    </p>
+                  </article>
+
+                  {/* Why / How It Happened */}
+                  <article className="rounded-lg bg-[#0F172A] p-4">
+                    <h5 className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                      Why / How It Happened?
+                    </h5>
+                    <p className="mt-3 text-sm text-gray-300 leading-relaxed">
+                      {prescriptive?.why ?? "-"}
+                    </p>
+                  </article>
+                </div>
+
+                {/* Recommended Action */}
+                <article className="mt-4 rounded-lg bg-[#0F172A] p-4">
+                  <h5 className="text-sm font-semibold text-white">
+                    Recommended Action
+                  </h5>
+                  <p className="mt-3 text-sm text-gray-300 leading-relaxed whitespace-pre-line">
+                    {prescriptive?.recommendedAction ?? "-"}
+                  </p>
+                </article>
+              </section>
+            </ModalBody>
+            <ModalFooter className="border-t border-white/10">
+              <Button
+                color="primary"
+                variant="solid"
+                onPress={close}
+                className="rounded-md"
+              >
+                Close
+              </Button>
+            </ModalFooter>
+          </>
+        )}
+      </ModalContent>
+    </Modal>
+  );
+}
+
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+export function mountModelModal(options: ModelModalOptions) {
+  if (typeof document === "undefined") return;
+
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "model-modal-root";
+    document.body.appendChild(container);
+  }
+
+  if (!root) {
+    root = createRoot(container);
+  }
+
+  root.render(
+    // Terapkan 'dark' mode di sini
+    <HeroUIProvider className="dark">
+      <ModelModal {...options} />
+    </HeroUIProvider>
   );
 }
 
 export function unmountModelModal() {
-  try {
-    if (reactRoot && modalRoot) {
-      reactRoot.unmount();
-      modalRoot.remove();
-    }
-  } catch (e) {
-    /* ignore */
+  if (root) {
+    root.unmount();
+    root = null;
   }
-  reactRoot = null;
-  modalRoot = null;
+  if (container) {
+    container.remove();
+    container = null;
+  }
 }
+
+export type { ModelModalOptions };
