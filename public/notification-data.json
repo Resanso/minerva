@@ -1,0 +1,42 @@
+{
+  "notifications": [
+    {
+      "id": "alarm-furnace-temp",
+      "title": "Furnace Temperature High",
+      "message": "Zona pemanasan furnace melewati ambang aman 780°C selama 2 menit.",
+      "timestamp": "2025-11-10T07:20:00Z",
+      "severity": "critical",
+      "machineId": "furnace"
+    },
+    {
+      "id": "alarm-rod-feeder-vibration",
+      "title": "Getaran Rod Feeder",
+      "message": "Sensor vibrasi mencatat anomali pada rod feeder line B.",
+      "timestamp": "2025-11-10T06:45:00Z",
+      "severity": "warning",
+      "machineId": "rod-feeder"
+    },
+    {
+      "id": "maintenance-homogenizing",
+      "title": "Reminder Maintenance",
+      "message": "Jadwal inspeksi homogenizing chamber akan jatuh tempo 12 jam lagi.",
+      "timestamp": "2025-11-10T04:10:00Z",
+      "severity": "info",
+      "machineId": "homogenizing"
+    },
+    {
+      "id": "quality-check",
+      "title": "Quality Check Update",
+      "message": "Batch extrusion terakhir lulus QC, siap dikirim ke storage zone D.",
+      "timestamp": "2025-11-10T03:30:00Z",
+      "severity": "info"
+    },
+    {
+      "id": "network-node-red",
+      "title": "Node-RED Connection",
+      "message": "Gateway Node-RED gedung E mengalami reconnect 3x dalam 15 menit.",
+      "timestamp": "2025-11-10T02:55:00Z",
+      "severity": "warning"
+    }
+  ]
+}

@@ -37,7 +37,7 @@ export default function GLTFViewer({
   models,
   className,
   style,
-  textureUrl = "/3d-model/textures/WIN_20241026_19_53_01_Pro.jpg",
+  textureUrl = "",
   configUrl = "/3d-model/models.json",
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +119,38 @@ export default function GLTFViewer({
     const loader = new GLTFLoader();
     const texLoader = new THREE.TextureLoader();
     let modalMounted = false;
+    let pendingModalId: string | null = null;
+
+    const openModalForObject = (object: THREE.Object3D, meta: any = {}) => {
+      try {
+        const id = object.userData?.modelId || object.name || "(unknown)";
+        const description = meta?.description ?? object.userData?.description;
+        const snapshot = object.clone(true);
+        if (modalMounted) {
+          try {
+            unmountModelModal();
+          } catch (err) {
+            console.error("Failed to unmount existing model modal", err);
+          }
+          modalMounted = false;
+        }
+        mountModelModal({
+          id,
+          position: object.position.clone(),
+          rotation: object.rotation.clone(),
+          scale: object.scale.clone(),
+          description,
+          objectSnapshot: snapshot,
+          onClose: () => {
+            modalMounted = false;
+          },
+        });
+        modalMounted = true;
+        pendingModalId = null;
+      } catch (err) {
+        console.error("Failed to mount model modal", err);
+      }
+    };
 
     // track loaded objects, materials and textures for cleanup
     const objects = new Map<string, THREE.Object3D>();
@@ -132,25 +164,7 @@ export default function GLTFViewer({
       camera,
       domElement: renderer.domElement,
       onSelect: ({ object, meta }) => {
-        try {
-          const id = object.userData?.modelId || object.name || "(unknown)";
-          const description = meta?.description ?? object.userData?.description;
-          const snapshot = object.clone(true);
-          mountModelModal({
-            id,
-            position: object.position.clone(),
-            rotation: object.rotation.clone(),
-            scale: object.scale.clone(),
-            description,
-            objectSnapshot: snapshot,
-            onClose: () => {
-              modalMounted = false;
-            },
-          });
-          modalMounted = true;
-        } catch (err) {
-          console.error("Failed to mount model modal", err);
-        }
+        openModalForObject(object, meta);
       },
       onDeselect: () => {
         if (!modalMounted) return;
@@ -162,6 +176,33 @@ export default function GLTFViewer({
         modalMounted = false;
       },
     });
+
+    const handleExternalOpen = (event: Event) => {
+      try {
+        const detail = (event as CustomEvent<{ id?: string }>).detail;
+        const targetId = detail?.id;
+        if (!targetId) return;
+        const direct =
+          objects.get(targetId) ??
+          Array.from(objects.values()).find((obj) => {
+            const modelId = String(obj.userData?.modelId || obj.name || "");
+            return modelId.toLowerCase() === targetId.toLowerCase();
+          });
+        if (direct) {
+          openModalForObject(direct);
+          pendingModalId = null;
+          return;
+        }
+        pendingModalId = targetId;
+      } catch (err) {
+        console.error("Failed processing external model modal request", err);
+      }
+    };
+
+    window.addEventListener(
+      "__openModelModal",
+      handleExternalOpen as EventListener
+    );
 
     // helper to apply a texture to a mesh and clone materials safely
     const applyTextureToMesh = (mesh: any, texture: THREE.Texture | null) => {
@@ -424,6 +465,15 @@ export default function GLTFViewer({
               );
             } catch (e) {
               /* ignore */
+            }
+
+            if (
+              pendingModalId &&
+              m.id &&
+              m.id.toLowerCase() === pendingModalId.toLowerCase()
+            ) {
+              openModalForObject(obj);
+              pendingModalId = null;
             }
 
             // apply per-model texture if configured, otherwise apply globalTexture (skip arrow)
@@ -818,9 +868,6 @@ export default function GLTFViewer({
     overlay.style.fontSize = "13px";
     overlay.style.borderRadius = "6px";
     overlay.style.zIndex = "999";
-    overlay.innerHTML = `<div style="font-weight:600;margin-bottom:6px">Drone mode (M)</div>
-      <div style="line-height:1.2">W/A/S/D: move<br>Space: up · Shift: down<br>Right-click + drag: look around<br>Press M to toggle drone (pointer-lock) mode</div>`;
-    container.appendChild(overlay);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -840,6 +887,10 @@ export default function GLTFViewer({
       window.removeEventListener(
         "__droneModeChanged",
         onDroneModeChanged as EventListener
+      );
+      window.removeEventListener(
+        "__openModelModal",
+        handleExternalOpen as EventListener
       );
       try {
         if (overlay && overlay.parentElement)

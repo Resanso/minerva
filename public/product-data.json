@@ -1,0 +1,32 @@
+[
+  {
+    "lot": "LOT-6061",
+    "status": "process",
+    "activeMachineId": "furnace",
+    "averages": {
+      "temperature": 74.5,
+      "argon_pressure": 2.4,
+      "water_pump": "78%"
+    },
+    "operationHour": 1.2,
+    "goodProduct": 18,
+    "defectProduct": 2,
+    "conclusion": null,
+    "updatedAt": "2025-11-09T08:00:00Z"
+  },
+  {
+    "lot": "LOT-7075",
+    "status": "finish",
+    "activeMachineId": "furnace",
+    "averages": {
+      "temperature": 75,
+      "argon_pressure": 2.5,
+      "water_pump": "80%"
+    },
+    "operationHour": "2 hours",
+    "goodProduct": 28,
+    "defectProduct": 4,
+    "conclusion": "The simulation was successfully executed with stable parameters. The furnace maintained a temperature of 75°C for a continuous 2-hour operation. During this period, a total of 28 good products were produced with 4 defects, indicating an overall production efficiency of approximately 87.5%.",
+    "updatedAt": "2025-11-09T09:30:00Z"
+  }
+]
