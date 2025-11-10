@@ -1,0 +1,365 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Button,
+  Input,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@heroui/react";
+import {
+  useSimulation,
+  type SimulationConfiguratorFormValues,
+  type ProductFlowDefinition,
+} from "./SimulationProvider";
+
+type GeneralFieldKey = keyof SimulationConfiguratorFormValues["general"];
+type ParameterFieldKey = keyof SimulationConfiguratorFormValues["parameters"];
+
+type FieldDescriptor<Key extends string> = {
+  key: Key;
+  label: string;
+  placeholder?: string;
+};
+
+const generalFieldDescriptors: FieldDescriptor<GeneralFieldKey>[] = [
+  { key: "lot", label: "Lot", placeholder: "cth. LOT-6061" },
+  { key: "derivative", label: "Derivative", placeholder: "cth. Round" },
+  { key: "diameter", label: "Diameter", placeholder: "cth. 6 inch" },
+  { key: "moltenState", label: "Molten State", placeholder: "cth. Liquid" },
+  {
+    key: "materialMix",
+    label: "Material Mix",
+    placeholder: "cth. Primary Ingot",
+  },
+  { key: "series", label: "Series", placeholder: "cth. 6000" },
+];
+
+const parameterFieldDescriptors: FieldDescriptor<ParameterFieldKey>[] = [
+  { key: "temperature", label: "Temperature", placeholder: "cth. 730°C" },
+  { key: "altitude", label: "Altitude", placeholder: "cth. 25 m" },
+  { key: "castingSpeed", label: "Casting Speed", placeholder: "cth. 15 m/min" },
+  {
+    key: "argonPressure",
+    label: "Argon Pressure",
+    placeholder: "cth. 2.5 bar",
+  },
+  { key: "waterPump", label: "Water Pump", placeholder: "cth. 80%" },
+];
+
+const createEmptyForm = (): SimulationConfiguratorFormValues => ({
+  general: {
+    lot: "",
+    derivative: "",
+    diameter: "",
+    moltenState: "",
+    materialMix: "",
+    series: "",
+  },
+  parameters: {
+    temperature: "",
+    altitude: "",
+    castingSpeed: "",
+    argonPressure: "",
+    waterPump: "",
+  },
+});
+
+const readDefaultValue = (
+  config: ProductFlowDefinition["defaultConfig"],
+  key: string
+) => {
+  const value = config?.[key];
+  return typeof value === "string" ? value : "";
+};
+
+function SimulationConfiguratorModal() {
+  const {
+    isConfiguratorOpen,
+    closeConfigurator,
+    submitConfiguration,
+    productFlows,
+    flowsLoading,
+    flowsError,
+    selectedProductId,
+    lastConfiguration,
+  } = useSimulation();
+
+  const [productId, setProductId] = useState<string | null>(null);
+  const [formValues, setFormValues] =
+    useState<SimulationConfiguratorFormValues>(createEmptyForm);
+
+  const selectedProduct = useMemo(() => {
+    if (!productId) return null;
+    return productFlows.find((item) => item.productId === productId) ?? null;
+  }, [productFlows, productId]);
+
+  const buildFormForProduct = useCallback(
+    (
+      product: ProductFlowDefinition | null
+    ): SimulationConfiguratorFormValues => {
+      if (!product) {
+        return createEmptyForm();
+      }
+      const defaults = product.defaultConfig ?? {};
+      const baseline =
+        selectedProductId === product.productId && lastConfiguration
+          ? lastConfiguration
+          : null;
+
+      const empty = createEmptyForm();
+      const general = { ...empty.general };
+      const parameters = { ...empty.parameters };
+
+      generalFieldDescriptors.forEach((field) => {
+        const baselineValue = baseline?.general?.[field.key];
+        general[field.key] =
+          typeof baselineValue === "string" && baselineValue.length > 0
+            ? baselineValue
+            : readDefaultValue(defaults, field.key);
+      });
+
+      parameterFieldDescriptors.forEach((field) => {
+        const baselineValue = baseline?.parameters?.[field.key];
+        parameters[field.key] =
+          typeof baselineValue === "string" && baselineValue.length > 0
+            ? baselineValue
+            : readDefaultValue(defaults, field.key);
+      });
+
+      return {
+        general,
+        parameters,
+      };
+    },
+    [lastConfiguration, selectedProductId]
+  );
+
+  useEffect(() => {
+    if (!isConfiguratorOpen) {
+      setProductId(null);
+      setFormValues(createEmptyForm());
+      return;
+    }
+
+    if (productFlows.length === 0) {
+      setProductId(null);
+      setFormValues(createEmptyForm());
+      return;
+    }
+
+    setProductId((current) => {
+      if (current && productFlows.some((flow) => flow.productId === current)) {
+        return current;
+      }
+      if (
+        selectedProductId &&
+        productFlows.some((flow) => flow.productId === selectedProductId)
+      ) {
+        return selectedProductId;
+      }
+      return productFlows[0].productId;
+    });
+  }, [isConfiguratorOpen, productFlows, selectedProductId]);
+
+  useEffect(() => {
+    if (!isConfiguratorOpen) return;
+    setFormValues(buildFormForProduct(selectedProduct));
+  }, [buildFormForProduct, isConfiguratorOpen, selectedProduct]);
+
+  const handleGeneralChange = useCallback(
+    (key: GeneralFieldKey, value: string) => {
+      setFormValues((prev) => ({
+        general: { ...(prev.general ?? {}), [key]: value },
+        parameters: { ...(prev.parameters ?? {}) },
+      }));
+    },
+    []
+  );
+
+  const handleParameterChange = useCallback(
+    (key: ParameterFieldKey, value: string) => {
+      setFormValues((prev) => ({
+        general: { ...(prev.general ?? {}) },
+        parameters: { ...(prev.parameters ?? {}), [key]: value },
+      }));
+    },
+    []
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!productId || !selectedProduct) return;
+    submitConfiguration(productId, formValues);
+  }, [formValues, productId, selectedProduct, submitConfiguration]);
+
+  const isSubmitDisabled = !selectedProduct || productFlows.length === 0;
+
+  return (
+    <Modal
+      size="3xl"
+      backdrop="blur"
+      isOpen={isConfiguratorOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          closeConfigurator();
+        }
+      }}
+      classNames={{
+        base: "bg-slate-900 text-white",
+        closeButton: "text-slate-400 hover:text-white", // align with dark theme
+      }}
+    >
+      <ModalContent>
+        <ModalHeader className="flex flex-col gap-1">
+          <span className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
+            Konfigurasi Simulasi
+          </span>
+          <h3 className="text-xl font-semibold text-white">
+            Pilih Produk & Parameter
+          </h3>
+          {selectedProduct && (
+            <p className="text-xs text-slate-400">
+              {selectedProduct.description}
+            </p>
+          )}
+        </ModalHeader>
+        <ModalBody className="space-y-6">
+          {flowsLoading && productFlows.length === 0 && (
+            <p className="rounded-lg border border-dashed border-slate-700 bg-slate-800/30 p-4 text-sm text-slate-300">
+              Memuat daftar flow produk...
+            </p>
+          )}
+
+          {flowsError && (
+            <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+              {flowsError}
+            </p>
+          )}
+
+          <section className="space-y-3">
+            <h4 className="text-sm font-semibold text-white">Pilih Produk</h4>
+            {productFlows.length === 0 ? (
+              <p className="rounded-lg border border-slate-800 bg-slate-800/40 p-4 text-sm text-slate-400">
+                Flow belum tersedia. Gunakan urutan default.
+              </p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {productFlows.map((product) => {
+                  const isActive = productId === product.productId;
+                  return (
+                    <button
+                      key={product.productId}
+                      type="button"
+                      onClick={() => setProductId(product.productId)}
+                      className={`rounded-xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                        isActive
+                          ? "border-blue-500 bg-blue-500/10 text-white"
+                          : "border-slate-800 bg-slate-800/40 text-slate-300 hover:border-blue-500/60 hover:text-white"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold">
+                        {product.productName}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {product.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-white">
+                Informasi Umum
+              </h4>
+              <p className="text-xs text-slate-500">
+                Data ini menentukan konteks lot dan material simulasi.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {generalFieldDescriptors.map((field) => (
+                <Input
+                  key={field.key}
+                  size="sm"
+                  variant="bordered"
+                  label={field.label}
+                  labelPlacement="outside"
+                  radius="lg"
+                  classNames={{
+                    inputWrapper: "bg-slate-800 border-slate-700",
+                    input: "text-white placeholder:text-slate-500",
+                    label: "text-slate-300",
+                  }}
+                  value={formValues.general?.[field.key] ?? ""}
+                  placeholder={field.placeholder}
+                  onValueChange={(value) =>
+                    handleGeneralChange(field.key, value)
+                  }
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-white">
+                Parameter Mesin
+              </h4>
+              <p className="text-xs text-slate-500">
+                Parameter opsional untuk simulasi environment mesin.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {parameterFieldDescriptors.map((field) => (
+                <Input
+                  key={field.key}
+                  size="sm"
+                  variant="bordered"
+                  label={field.label}
+                  labelPlacement="outside"
+                  radius="lg"
+                  classNames={{
+                    inputWrapper: "bg-slate-800 border-slate-700",
+                    input: "text-white placeholder:text-slate-500",
+                    label: "text-slate-300",
+                  }}
+                  value={formValues.parameters?.[field.key] ?? ""}
+                  placeholder={field.placeholder}
+                  onValueChange={(value) =>
+                    handleParameterChange(field.key, value)
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="flat"
+            color="default"
+            className="bg-slate-800/60 text-slate-300"
+            onPress={closeConfigurator}
+          >
+            Batal
+          </Button>
+          <Button
+            color="primary"
+            className="bg-blue-500 text-white"
+            isDisabled={isSubmitDisabled}
+            onPress={handleSubmit}
+          >
+            Mulai Simulasi
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+export default SimulationConfiguratorModal;
