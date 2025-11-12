@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button } from "@heroui/react";
+import { Input } from "@/components/ui/input";
 import {
-  Button,
-  Input,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-} from "@heroui/react";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   useSimulation,
   type SimulationConfiguratorFormValues,
@@ -198,35 +199,29 @@ function SimulationConfiguratorModal() {
   const isSubmitDisabled = !selectedProduct || productFlows.length === 0;
 
   return (
-    <Modal
-      size="3xl"
-      backdrop="blur"
-      isOpen={isConfiguratorOpen}
+    <Dialog
+      open={isConfiguratorOpen}
       onOpenChange={(open) => {
         if (!open) {
           closeConfigurator();
         }
       }}
-      classNames={{
-        base: "bg-slate-900 text-white",
-        closeButton: "text-slate-400 hover:text-white", // align with dark theme
-      }}
     >
-      <ModalContent>
-        <ModalHeader className="flex flex-col gap-1">
+      <DialogContent className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden border border-slate-800 bg-slate-900 p-0 text-white">
+        <DialogHeader className="border-b border-slate-800 px-6 py-5">
           <span className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
             Konfigurasi Simulasi
           </span>
-          <h3 className="text-xl font-semibold text-white">
+          <DialogTitle className="text-xl font-semibold text-white">
             Pilih Produk & Parameter
-          </h3>
+          </DialogTitle>
           {selectedProduct && (
-            <p className="text-xs text-slate-400">
+            <DialogDescription className="text-xs text-slate-400">
               {selectedProduct.description}
-            </p>
+            </DialogDescription>
           )}
-        </ModalHeader>
-        <ModalBody className="space-y-6">
+        </DialogHeader>
+        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
           {flowsLoading && productFlows.length === 0 && (
             <p className="rounded-lg border border-dashed border-slate-700 bg-slate-800/30 p-4 text-sm text-slate-300">
               Memuat daftar flow produk...
@@ -284,24 +279,22 @@ function SimulationConfiguratorModal() {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {generalFieldDescriptors.map((field) => (
-                <Input
-                  key={field.key}
-                  size="sm"
-                  variant="bordered"
-                  label={field.label}
-                  labelPlacement="outside"
-                  radius="lg"
-                  classNames={{
-                    inputWrapper: "bg-slate-800 border-slate-700",
-                    input: "text-white placeholder:text-slate-500",
-                    label: "text-slate-300",
-                  }}
-                  value={formValues.general?.[field.key] ?? ""}
-                  placeholder={field.placeholder}
-                  onValueChange={(value) =>
-                    handleGeneralChange(field.key, value)
-                  }
-                />
+                <div key={field.key} className="space-y-2">
+                  <label
+                    htmlFor={`general-${field.key}`}
+                    className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400"
+                  >
+                    {field.label}
+                  </label>
+                  <Input
+                    id={`general-${field.key}`}
+                    placeholder={field.placeholder}
+                    value={formValues.general?.[field.key] ?? ""}
+                    onChange={(event) =>
+                      handleGeneralChange(field.key, event.target.value)
+                    }
+                  />
+                </div>
               ))}
             </div>
           </section>
@@ -317,29 +310,27 @@ function SimulationConfiguratorModal() {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {parameterFieldDescriptors.map((field) => (
-                <Input
-                  key={field.key}
-                  size="sm"
-                  variant="bordered"
-                  label={field.label}
-                  labelPlacement="outside"
-                  radius="lg"
-                  classNames={{
-                    inputWrapper: "bg-slate-800 border-slate-700",
-                    input: "text-white placeholder:text-slate-500",
-                    label: "text-slate-300",
-                  }}
-                  value={formValues.parameters?.[field.key] ?? ""}
-                  placeholder={field.placeholder}
-                  onValueChange={(value) =>
-                    handleParameterChange(field.key, value)
-                  }
-                />
+                <div key={field.key} className="space-y-2">
+                  <label
+                    htmlFor={`parameter-${field.key}`}
+                    className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400"
+                  >
+                    {field.label}
+                  </label>
+                  <Input
+                    id={`parameter-${field.key}`}
+                    placeholder={field.placeholder}
+                    value={formValues.parameters?.[field.key] ?? ""}
+                    onChange={(event) =>
+                      handleParameterChange(field.key, event.target.value)
+                    }
+                  />
+                </div>
               ))}
             </div>
           </section>
-        </ModalBody>
-        <ModalFooter>
+        </div>
+        <DialogFooter className="border-t border-slate-800 px-6 py-4">
           <Button
             variant="flat"
             color="default"
@@ -356,9 +347,9 @@ function SimulationConfiguratorModal() {
           >
             Mulai Simulasi
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

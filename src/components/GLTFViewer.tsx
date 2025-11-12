@@ -4,13 +4,18 @@ import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import {
   createFadeInMoveRightAnimation,
+  createLadleCarAnimation,
   ModelAnimation,
 } from "./modelAnimations";
 import { createViewerControls, ViewerControlsAPI } from "./ViewerControls";
 import { mountModelModal, unmountModelModal } from "./ModelModal";
+import { ModelHoverTooltip, type ModelHoverInfo } from "./ModelHoverTooltip";
+import type { MachineDetails } from "@/lib/machines";
+import { loadMachineById } from "@/lib/machines";
 
 type ModelItem = {
   id: string; // unique identifier for the model
@@ -32,6 +37,8 @@ type Props = {
   configUrl?: string;
 };
 
+const CAMERA_LERP_SPEED = 2;
+
 export default function GLTFViewer({
   src = "/3d-model/furnace.glb",
   models,
@@ -42,10 +49,17 @@ export default function GLTFViewer({
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [droneMode, setDroneMode] = useState(false);
+  const [hoverInfo, setHoverInfo] = useState<ModelHoverInfo | null>(null);
+  const hoverMachineCacheRef = useRef<Map<string, MachineDetails | null>>(
+    new Map()
+  );
+  const hoverFetchRef = useRef<Map<string, boolean>>(new Map());
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    let disposed = false;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0a0a);
@@ -112,20 +126,97 @@ export default function GLTFViewer({
     scene.add(grid);
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.12;
     controls.target.set(0, 1, 0);
     controls.update();
     const controlsRef = { current: controls } as { current: any };
+    const droneModeRef = { current: droneMode } as { current: boolean };
+    const targetCameraPosition = new THREE.Vector3().copy(camera.position);
+    const targetOrbit = new THREE.Vector3().copy(controls.target);
+    const animationClock = new THREE.Clock();
+    animationClock.getDelta();
+    let focusActive = false;
+    let isUserInteracting = false;
 
-    const loader = new GLTFLoader();
+    function focusOnObject(targetObject: THREE.Object3D | null, meta?: any) {
+      if (!targetObject || droneModeRef.current) return;
+
+      const cameraInstance = cameraRef.current;
+      const orbit = controlsRef.current as OrbitControls | null;
+      if (!cameraInstance || !orbit) return;
+
+      const box = new THREE.Box3().setFromObject(targetObject);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const distance = Math.max(maxDim * 1.8, 3);
+
+      const baseDirection = new THREE.Vector3()
+        .subVectors(cameraInstance.position, orbit.target)
+        .normalize();
+      if (baseDirection.lengthSq() === 0) {
+        baseDirection.set(0, 0.5, 1).normalize();
+      }
+      const rotatedDirection = baseDirection
+        .clone()
+        .applyAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          THREE.MathUtils.degToRad(15)
+        )
+        .multiplyScalar(distance);
+
+      const finalPosition = center.clone().add(rotatedDirection);
+      finalPosition.y = Math.max(
+        center.y + Math.max(maxDim * 0.4, 0.8),
+        finalPosition.y
+      );
+
+      targetCameraPosition.copy(finalPosition);
+      targetOrbit.copy(center);
+      focusActive = true;
+      animationClock.getDelta();
+      isUserInteracting = false;
+
+      if (meta && meta.cameraOffset) {
+        try {
+          const offset = meta.cameraOffset as THREE.Vector3;
+          if (offset instanceof THREE.Vector3) {
+            targetCameraPosition.add(offset);
+          }
+        } catch (e) {
+          /* ignore optional meta offsets */
+        }
+      }
+    }
+
+    const onControlsStart = () => {
+      isUserInteracting = true;
+      focusActive = false;
+    };
+    const onControlsEnd = () => {
+      isUserInteracting = false;
+      if (!focusActive) {
+        targetCameraPosition.copy(camera.position);
+        targetOrbit.copy(controls.target);
+      }
+    };
+    (controls as any).addEventListener("start", onControlsStart);
+    (controls as any).addEventListener("end", onControlsEnd);
+
+    const gltfLoader = new GLTFLoader();
+    const stlLoader = new STLLoader();
     const texLoader = new THREE.TextureLoader();
     let modalMounted = false;
     let pendingModalId: string | null = null;
 
     const openModalForObject = (object: THREE.Object3D, meta: any = {}) => {
+      if (object?.userData?.allowInteraction === false) return;
       try {
         const id = object.userData?.modelId || object.name || "(unknown)";
         const description = meta?.description ?? object.userData?.description;
         const snapshot = object.clone(true);
+        focusOnObject(object, meta);
         if (modalMounted) {
           try {
             unmountModelModal();
@@ -160,7 +251,10 @@ export default function GLTFViewer({
     const appliedTextures: THREE.Texture[] = [];
     // viewer controls (separate DOM panel) - provide deps for selection
     const controlsApi: ViewerControlsAPI = createViewerControls(container, {
-      getObjects: () => Array.from(objects.values()),
+      getObjects: () =>
+        Array.from(objects.values()).filter(
+          (obj) => obj.userData?.allowInteraction !== false
+        ),
       camera,
       domElement: renderer.domElement,
       onSelect: ({ object, meta }) => {
@@ -340,6 +434,15 @@ export default function GLTFViewer({
       // remove objects that are not in incoming list
       for (const [id, obj] of objects.entries()) {
         if (!incomingIds.has(id)) {
+          const anim = customAnimations.get(id);
+          if (anim) {
+            try {
+              anim.dispose?.();
+            } catch (e) {
+              /* ignore */
+            }
+            customAnimations.delete(id);
+          }
           scene.remove(obj);
           // dispose materials on meshes
           obj.traverse((child: any) => {
@@ -374,15 +477,253 @@ export default function GLTFViewer({
           continue;
         }
 
-        // load new model
-        loader.load(
+        // load new model (supports .glb/.gltf and .stl)
+        const finalize = (obj: THREE.Object3D, animations: any[] = []) => {
+          const idLower = (m.id || "").toLowerCase();
+          const srcLower = (m.src || "").toLowerCase();
+          const isFloor = idLower === "floor" || srcLower.includes("floor");
+          const isLadleCar =
+            idLower === "car" ||
+            idLower === "ladle_car" ||
+            srcLower.includes("ladle_car.glb");
+          const isRoad = idLower === "road" || srcLower.includes("road.glb");
+          const allowInteraction = !(isFloor || isLadleCar || isRoad);
+
+          try {
+            obj.userData = obj.userData || {};
+            obj.userData.allowInteraction = allowInteraction;
+            if (allowInteraction) {
+              obj.userData.modelId = m.id;
+            } else if ("modelId" in obj.userData) {
+              delete obj.userData.modelId;
+            }
+          } catch (e) {
+            /* ignore */
+          }
+
+          try {
+            obj.traverse((child: any) => {
+              child.userData = child.userData || {};
+              child.userData.allowInteraction = allowInteraction;
+              if (!allowInteraction) {
+                if ("modelId" in child.userData) delete child.userData.modelId;
+              } else if (typeof child.userData.modelId === "undefined") {
+                child.userData.modelId = m.id;
+              }
+              if (child.isMesh) {
+                try {
+                  child.castShadow = true;
+                  child.receiveShadow = true;
+                } catch (e) {
+                  /* ignore */
+                }
+                if (allowInteraction && !child.userData.modelId) {
+                  child.userData.modelId = m.id;
+                }
+              }
+            });
+          } catch (e) {
+            /* ignore */
+          }
+
+          try {
+            normalizeObject(obj, 1.5);
+          } catch (e) {
+            /* ignore normalization errors */
+          }
+
+          const [x = 0, y = 0, z = 0] = m.position || [0, 0, 0];
+          obj.position.set(x, y, z);
+          if (m.rotation) {
+            try {
+              let rx = m.rotation[0] || 0;
+              let ry = m.rotation[1] || 0;
+              let rz = m.rotation[2] || 0;
+              const limit = Math.PI * 2;
+              const isLikelyDegrees =
+                Math.abs(rx) > limit ||
+                Math.abs(ry) > limit ||
+                Math.abs(rz) > limit;
+              if (isLikelyDegrees) {
+                const toRad = (v: number) => (v * Math.PI) / 180;
+                rx = toRad(rx);
+                ry = toRad(ry);
+                rz = toRad(rz);
+              }
+              obj.rotation.set(rx, ry, rz);
+            } catch (e) {
+              /* ignore rotation errors */
+            }
+          }
+          if (typeof m.scale === "number") obj.scale.setScalar(m.scale);
+
+          scene.add(obj);
+          objects.set(m.id, obj);
+          try {
+            if (!obj.name) obj.name = m.id;
+          } catch (e) {
+            /* ignore */
+          }
+
+          try {
+            obj.userData = obj.userData || {};
+            if (isFloor) {
+              obj.userData.allowInteraction = false;
+              if ("modelId" in obj.userData) delete obj.userData.modelId;
+              obj.userData.clips = [];
+            } else {
+              if (typeof obj.userData.allowInteraction === "undefined") {
+                obj.userData.allowInteraction = true;
+              }
+              obj.userData.modelId = m.id;
+              obj.userData.clips = (animations || []).map(
+                (a: any) => a?.name || ""
+              );
+            }
+          } catch (e) {
+            /* ignore */
+          }
+
+          if (
+            allowInteraction &&
+            pendingModalId &&
+            m.id &&
+            m.id.toLowerCase() === pendingModalId.toLowerCase()
+          ) {
+            openModalForObject(obj);
+            pendingModalId = null;
+          }
+
+          try {
+            const modelCfg: any = m as any;
+            if (modelCfg && modelCfg.texture) {
+              texLoader.load(
+                modelCfg.texture,
+                (t) => {
+                  try {
+                    (t as any).encoding = (THREE as any).sRGBEncoding;
+                    t.flipY = false;
+                    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+                    t.repeat.set(1, 1);
+                    t.generateMipmaps = true;
+                    t.minFilter =
+                      (THREE as any).LinearMipmapLinearFilter ||
+                      THREE.LinearMipmapLinearFilter;
+                    t.magFilter = THREE.LinearFilter;
+                    t.needsUpdate = true;
+                    appliedTextures.push(t);
+                    obj.traverse((child: any) => {
+                      if (child.isMesh) applyTextureToMesh(child, t);
+                    });
+                  } catch (e) {
+                    /* ignore */
+                  }
+                },
+                undefined,
+                () => {
+                  /* ignore per-model texture load errors */
+                }
+              );
+            } else if (globalTexture && m.id !== "arrow") {
+              obj.traverse((child: any) => {
+                if (child.isMesh) applyTextureToMesh(child, globalTexture);
+              });
+            }
+          } catch (e) {
+            /* ignore texture errors */
+          }
+
+          try {
+            if (m.id === "arrow") {
+              const baseX = obj.position.x || 0;
+              const distance = (m as any).animationDistance || 1.6;
+              const duration = (m as any).animationDuration || 1.4;
+              const anim = createFadeInMoveRightAnimation(obj, {
+                baseX,
+                distance,
+                duration,
+              });
+              const prev = customAnimations.get(m.id);
+              try {
+                prev?.dispose?.();
+              } catch (e) {
+                /* ignore */
+              }
+              customAnimations.set(m.id, anim);
+            } else if (m.id === "car" || m.id === "ladle_car") {
+              const anim = createLadleCarAnimation(obj, {
+                start: [
+                  (m as any).animationStartX ?? -2,
+                  (m as any).animationStartY ?? 0.05,
+                  (m as any).animationStartZ ?? 2,
+                ],
+                waypoint: [
+                  (m as any).animationWaypointX ?? 4.5,
+                  (m as any).animationWaypointY ?? 0.05,
+                  (m as any).animationWaypointZ ?? 2,
+                ],
+                end: [
+                  (m as any).animationEndX ?? 4.5,
+                  (m as any).animationEndY ?? 0.05,
+                  (m as any).animationEndZ ?? 6,
+                ],
+                startYawDeg: (m as any).animationStartYaw ?? 270,
+                endYawDeg: (m as any).animationEndYaw ?? 180,
+                forwardDuration: (m as any).animationForwardDuration ?? 6,
+                cornerDuration: (m as any).animationCornerDuration ?? 4,
+                dwellDuration: (m as any).animationDwellDuration ?? 2,
+                returnDuration: (m as any).animationReturnDuration ?? 2,
+              });
+              const prev = customAnimations.get(m.id);
+              try {
+                prev?.dispose?.();
+              } catch (e) {
+                /* ignore */
+              }
+              customAnimations.set(m.id, anim);
+            }
+          } catch (e) {
+            /* ignore animation errors */
+          }
+        };
+
+        const extension = (m.src.split(".").pop() || "").toLowerCase();
+        if (extension === "stl") {
+          stlLoader.load(
+            m.src,
+            (geometry: THREE.BufferGeometry) => {
+              try {
+                geometry.computeVertexNormals();
+              } catch (e) {
+                /* ignore */
+              }
+              const material = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+              });
+              material.needsUpdate = true;
+              const mesh = new THREE.Mesh(geometry, material);
+              mesh.name = m.id;
+              clonedMaterials.push(material);
+              const group = new THREE.Group();
+              group.name = `${m.id}-root`;
+              group.add(mesh);
+              finalize(group, []);
+            },
+            undefined,
+            (err: unknown) => {
+              // eslint-disable-next-line no-console
+              console.error("STL load error:", err);
+            }
+          );
+          continue;
+        }
+
+        gltfLoader.load(
           m.src,
           (gltf: any) => {
             const obj = gltf.scene;
-            // apply texture to child meshes (if texture already loaded)
             obj.traverse((child: any) => {
               if (child.isMesh) {
-                // ensure geometry has UVs; if not, create simple planar UVs
                 const geom: THREE.BufferGeometry | undefined = child.geometry;
                 if (geom) {
                   const posAttr = geom.getAttribute("position");
@@ -394,10 +735,10 @@ export default function GLTFViewer({
                     const count = posAttr.count;
                     const uvArray = new Float32Array(count * 2);
                     for (let i = 0; i < count; i++) {
-                      const x = posAttr.getX(i);
-                      const y = posAttr.getY(i);
-                      const u = (x - bbox.min.x) / (size.x || 1);
-                      const v = (y - bbox.min.y) / (size.y || 1);
+                      const px = posAttr.getX(i);
+                      const py = posAttr.getY(i);
+                      const u = (px - bbox.min.x) / (size.x || 1);
+                      const v = (py - bbox.min.y) / (size.y || 1);
                       uvArray[i * 2] = u;
                       uvArray[i * 2 + 1] = v;
                     }
@@ -407,131 +748,9 @@ export default function GLTFViewer({
                     );
                   }
                 }
-                // enable shadows for model meshes so they cast onto the floor
-                try {
-                  child.castShadow = true;
-                  child.receiveShadow = true;
-                } catch (e) {
-                  /* ignore */
-                }
               }
             });
-
-            normalizeObject(obj, 1.5);
-
-            // apply provided transforms
-            const [x = 0, y = 0, z = 0] = m.position || [0, 0, 0];
-            obj.position.set(x, y, z);
-            // ensure the object's bottom is at or above the floor (y=0)
-            try {
-              const bbox = new THREE.Box3().setFromObject(obj);
-              const minY = bbox.min.y;
-              // if the object's min Y is below 0, lift it up so it rests on the floor
-            } catch (e) {
-              // ignore bbox errors
-            }
-            if (m.rotation) {
-              try {
-                // accept rotation as either radians or degrees (auto-detect)
-                let rx = m.rotation[0] || 0;
-                let ry = m.rotation[1] || 0;
-                let rz = m.rotation[2] || 0;
-                const limit = Math.PI * 2; // ~6.283
-                const isLikelyDegrees =
-                  Math.abs(rx) > limit ||
-                  Math.abs(ry) > limit ||
-                  Math.abs(rz) > limit;
-                if (isLikelyDegrees) {
-                  const toRad = (v: number) => (v * Math.PI) / 180;
-                  rx = toRad(rx);
-                  ry = toRad(ry);
-                  rz = toRad(rz);
-                }
-                obj.rotation.set(rx, ry, rz);
-              } catch (e) {
-                /* ignore rotation errors */
-              }
-            }
-            if (typeof m.scale === "number") obj.scale.setScalar(m.scale);
-
-            scene.add(obj);
-            objects.set(m.id, obj);
-            // record model id and available animation clips for selection UI
-            try {
-              obj.userData = obj.userData || {};
-              obj.userData.modelId = m.id;
-              obj.userData.clips = (gltf.animations || []).map(
-                (a: any) => a.name || ""
-              );
-            } catch (e) {
-              /* ignore */
-            }
-
-            if (
-              pendingModalId &&
-              m.id &&
-              m.id.toLowerCase() === pendingModalId.toLowerCase()
-            ) {
-              openModalForObject(obj);
-              pendingModalId = null;
-            }
-
-            // apply per-model texture if configured, otherwise apply globalTexture (skip arrow)
-            try {
-              const modelCfg: any = m as any;
-              if (modelCfg && modelCfg.texture) {
-                // load per-model texture
-                texLoader.load(
-                  modelCfg.texture,
-                  (t) => {
-                    try {
-                      (t as any).encoding = (THREE as any).sRGBEncoding;
-                      t.flipY = false;
-                      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-                      t.repeat.set(1, 1);
-                      t.generateMipmaps = true;
-                      t.minFilter =
-                        (THREE as any).LinearMipmapLinearFilter ||
-                        THREE.LinearMipmapLinearFilter;
-                      t.magFilter = THREE.LinearFilter;
-                      t.needsUpdate = true;
-                      appliedTextures.push(t);
-                      obj.traverse((child: any) => {
-                        if (child.isMesh) applyTextureToMesh(child, t);
-                      });
-                    } catch (e) {
-                      /* ignore */
-                    }
-                  },
-                  undefined,
-                  () => {
-                    /* ignore per-model texture load errors */
-                  }
-                );
-              } else if (globalTexture && m.id !== "arrow") {
-                obj.traverse((child: any) => {
-                  if (child.isMesh) applyTextureToMesh(child, globalTexture);
-                });
-              }
-            } catch (e) {
-              /* ignore */
-            }
-            // if this is the arrow model, set up a custom left-right animation so it sweeps across
-            try {
-              if (m.id === "arrow") {
-                const baseX = obj.position.x || 0;
-                const distance = (m as any).animationDistance || 1.6;
-                const duration = (m as any).animationDuration || 1.4;
-                const anim = createFadeInMoveRightAnimation(obj, {
-                  baseX,
-                  distance,
-                  duration,
-                });
-                customAnimations.set(m.id, anim);
-              }
-            } catch (e) {
-              /* ignore */
-            }
+            finalize(obj, gltf.animations || []);
           },
           undefined,
           (err: unknown) => {
@@ -573,7 +792,6 @@ export default function GLTFViewer({
       down: false,
     };
     const movementRef = { current: movement } as { current: typeof movement };
-    const droneModeRef = { current: droneMode } as { current: boolean };
     let pointerLocked = false;
     // structured look state for clearer controls
     let isRightMouseDown = false;
@@ -829,6 +1047,28 @@ export default function GLTFViewer({
         }
       }
 
+      const delta = animationClock.getDelta();
+      const lerpStep = Math.min(1, CAMERA_LERP_SPEED * delta);
+
+      if (!droneModeRef.current && !isUserInteracting) {
+        camera.position.lerp(targetCameraPosition, lerpStep);
+        controls.target.lerp(targetOrbit, lerpStep);
+        if (
+          camera.position.distanceToSquared(targetCameraPosition) < 1e-4 &&
+          controls.target.distanceToSquared(targetOrbit) < 1e-4
+        ) {
+          focusActive = false;
+          targetCameraPosition.copy(camera.position);
+          targetOrbit.copy(controls.target);
+        }
+      } else {
+        focusActive = false;
+        targetCameraPosition.copy(camera.position);
+        targetOrbit.copy(controls.target);
+      }
+
+      controls.update();
+
       // advance any custom per-model animations
       try {
         for (const anim of customAnimations.values()) {
@@ -844,6 +1084,142 @@ export default function GLTFViewer({
 
       renderer.render(scene, camera);
     };
+    const hoverRaycaster = new THREE.Raycaster();
+    const hoverMouse = new THREE.Vector2();
+    const hoverBox = new THREE.Box3();
+    const hoverCenter = new THREE.Vector3();
+    const hoverProjected = new THREE.Vector3();
+    let lastHoverId: string | null = null;
+
+    const machineCache = hoverMachineCacheRef.current;
+    const fetchCache = hoverFetchRef.current;
+
+    const resolveMachine = (modelId: string) => {
+      if (machineCache.has(modelId) || fetchCache.get(modelId)) return;
+      fetchCache.set(modelId, true);
+      loadMachineById(modelId)
+        .then((data) => {
+          if (disposed) return;
+          machineCache.set(modelId, data);
+          setHoverInfo((current) => {
+            if (!current || current.id !== modelId) return current;
+            return { ...current, machine: data };
+          });
+        })
+        .catch(() => {
+          if (disposed) return;
+          machineCache.set(modelId, null);
+        })
+        .finally(() => {
+          fetchCache.delete(modelId);
+        });
+    };
+
+    const clearHover = () => {
+      if (lastHoverId === null) return;
+      lastHoverId = null;
+      if (!disposed) setHoverInfo(null);
+    };
+
+    const onCanvasPointerMove = (event: PointerEvent) => {
+      if (disposed) return;
+      if (pointerLocked || droneModeRef.current) {
+        clearHover();
+        return;
+      }
+      const cam = cameraRef.current;
+      if (!cam) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const width = rect.width || 1;
+      const height = rect.height || 1;
+      hoverMouse.x = ((event.clientX - rect.left) / width) * 2 - 1;
+      hoverMouse.y = -((event.clientY - rect.top) / height) * 2 + 1;
+      hoverRaycaster.setFromCamera(hoverMouse, cam);
+
+      const candidates = Array.from(objects.values()).filter(
+        (obj) => obj.userData?.allowInteraction !== false
+      );
+      if (!candidates.length) {
+        clearHover();
+        return;
+      }
+      const intersections = hoverRaycaster.intersectObjects(candidates, true);
+      if (!intersections.length) {
+        clearHover();
+        return;
+      }
+
+      let picked: THREE.Object3D | null = intersections[0].object;
+      while (picked && !picked.userData?.modelId) {
+        picked = picked.parent;
+      }
+
+      if (!picked) {
+        clearHover();
+        return;
+      }
+
+      if (picked.userData?.allowInteraction === false) {
+        clearHover();
+        return;
+      }
+
+      const rawId = picked.userData?.modelId;
+      if (!rawId) {
+        clearHover();
+        return;
+      }
+      const modelId = String(rawId);
+
+      if (lastHoverId !== modelId) {
+        lastHoverId = modelId;
+        resolveMachine(modelId);
+      }
+
+      hoverBox.setFromObject(picked);
+      hoverCenter.set(
+        (hoverBox.min.x + hoverBox.max.x) / 2,
+        hoverBox.max.y,
+        (hoverBox.min.z + hoverBox.max.z) / 2
+      );
+      hoverProjected.copy(hoverCenter).project(cam);
+      const screenX = rect.left + ((hoverProjected.x + 1) / 2) * width;
+      const screenY = rect.top + ((-hoverProjected.y + 1) / 2) * height;
+
+      if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) {
+        clearHover();
+        return;
+      }
+
+      const machine = machineCache.get(modelId) ?? null;
+      setHoverInfo((previous) => {
+        if (disposed) return previous;
+        if (
+          previous &&
+          previous.id === modelId &&
+          Math.abs(previous.screenX - screenX) < 0.5 &&
+          Math.abs(previous.screenY - screenY) < 0.5 &&
+          previous.machine === machine
+        ) {
+          return previous;
+        }
+        return {
+          id: modelId,
+          screenX,
+          screenY,
+          machine,
+        };
+      });
+    };
+
+    const onCanvasPointerLeave = () => {
+      clearHover();
+    };
+
+    renderer.domElement.addEventListener("pointermove", onCanvasPointerMove);
+    renderer.domElement.addEventListener("pointerleave", onCanvasPointerLeave);
+    renderer.domElement.addEventListener("pointerdown", clearHover);
+
     animate();
 
     const onResize = () => {
@@ -870,6 +1246,7 @@ export default function GLTFViewer({
     overlay.style.zIndex = "999";
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       // pointer listener cleaned up by ViewerControls
@@ -893,8 +1270,28 @@ export default function GLTFViewer({
         handleExternalOpen as EventListener
       );
       try {
+        renderer.domElement.removeEventListener(
+          "pointermove",
+          onCanvasPointerMove
+        );
+        renderer.domElement.removeEventListener(
+          "pointerleave",
+          onCanvasPointerLeave
+        );
+        renderer.domElement.removeEventListener("pointerdown", clearHover);
+      } catch (e) {
+        /* ignore */
+      }
+      clearHover();
+      try {
         if (overlay && overlay.parentElement)
           overlay.parentElement.removeChild(overlay);
+      } catch (e) {
+        /* ignore */
+      }
+      try {
+        (controls as any).removeEventListener("start", onControlsStart);
+        (controls as any).removeEventListener("end", onControlsEnd);
       } catch (e) {
         /* ignore */
       }
@@ -924,6 +1321,14 @@ export default function GLTFViewer({
             // ignore
           }
         });
+        for (const anim of customAnimations.values()) {
+          try {
+            anim.dispose?.();
+          } catch (e) {
+            /* ignore */
+          }
+        }
+        customAnimations.clear();
       } catch (e) {
         // ignore
       }
@@ -936,15 +1341,18 @@ export default function GLTFViewer({
   }, [src, JSON.stringify(models || [])]);
 
   return (
-    <div
-      ref={containerRef}
-      className={className}
-      style={{
-        width: "100%",
-        height: "100%",
-        position: "relative",
-        ...(style || {}),
-      }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className={className}
+        style={{
+          width: "100%",
+          height: "100%",
+          position: "relative",
+          ...(style || {}),
+        }}
+      />
+      <ModelHoverTooltip info={hoverInfo} />
+    </>
   );
 }

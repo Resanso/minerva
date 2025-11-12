@@ -14,6 +14,7 @@ type LoadedObject = {
 };
 
 const FLOOR_SIZE = 120;
+const CAMERA_LERP_SPEED = 2;
 
 const normalizeObject = (object: THREE.Object3D, desiredSize = 1) => {
   const box = new THREE.Box3().setFromObject(object);
@@ -45,6 +46,10 @@ export default function SimulationScene() {
   const objectsRef = useRef(new Map<string, LoadedObject>());
   const rafRef = useRef<number | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const targetCameraPositionRef = useRef(new THREE.Vector3());
+  const targetOrbitRef = useRef(new THREE.Vector3());
+  const animationClockRef = useRef(new THREE.Clock());
 
   const { steps, activeMachineId } = useSimulation();
   const arrangedSteps = useMemo(() => prepareSteps(steps), [steps]);
@@ -65,6 +70,7 @@ export default function SimulationScene() {
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 200);
     camera.position.set(0, 6, 12);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -77,6 +83,104 @@ export default function SimulationScene() {
     controls.target.set(0, 1, 0);
     controls.update();
     controlsRef.current = controls;
+
+    targetCameraPositionRef.current.copy(camera.position);
+    targetOrbitRef.current.copy(controls.target);
+    animationClockRef.current.getDelta();
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let pointerDownPos: { x: number; y: number } | null = null;
+
+    const focusOnObject = (targetObject: THREE.Object3D) => {
+      const cameraInstance = cameraRef.current;
+      const orbit = controlsRef.current;
+      if (!cameraInstance || !orbit) return;
+
+      const box = new THREE.Box3().setFromObject(targetObject);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const distance = Math.max(maxDim * 2, 6);
+
+      const baseDirection = new THREE.Vector3()
+        .subVectors(cameraInstance.position, orbit.target)
+        .normalize();
+      const rotatedDirection = baseDirection
+        .clone()
+        .applyAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          THREE.MathUtils.degToRad(18)
+        )
+        .multiplyScalar(distance);
+
+      const finalPosition = center.clone().add(rotatedDirection);
+      finalPosition.y = Math.max(
+        finalPosition.y,
+        center.y + Math.max(maxDim * 0.5, 1.2)
+      );
+      targetCameraPositionRef.current.copy(finalPosition);
+      targetOrbitRef.current.copy(center);
+    };
+
+    const resolveStepFromObject = (
+      object: THREE.Object3D
+    ): { stepId: string; root: THREE.Object3D } | null => {
+      let current: THREE.Object3D | null = object;
+      while (current) {
+        const stepId = current.userData?.stepId as string | undefined;
+        if (stepId && objectsRef.current.has(stepId)) {
+          const entry = objectsRef.current.get(stepId);
+          if (entry) {
+            return { stepId, root: entry.object };
+          }
+        }
+        current = current.parent;
+      }
+      return null;
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      pointerDownPos = { x: event.clientX, y: event.clientY };
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      if (pointerDownPos) {
+        const deltaX = Math.abs(event.clientX - pointerDownPos.x);
+        const deltaY = Math.abs(event.clientY - pointerDownPos.y);
+        if (deltaX > 6 || deltaY > 6) {
+          pointerDownPos = null;
+          return;
+        }
+      }
+      pointerDownPos = null;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const interactables = Array.from(objectsRef.current.values()).map(
+        (entry) => entry.object
+      );
+      if (!interactables.length) return;
+
+      const intersections = raycaster.intersectObjects(interactables, true);
+      if (!intersections.length) return;
+
+      const resolved = resolveStepFromObject(intersections[0].object);
+      if (!resolved) return;
+
+      focusOnObject(resolved.root);
+      activeIdRef.current = resolved.stepId;
+      setHighlight(resolved.stepId);
+    };
+
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+    renderer.domElement.addEventListener("pointerup", handlePointerUp);
 
     // lights
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x223344, 0.6);
@@ -195,8 +299,18 @@ export default function SimulationScene() {
             baseScale,
             basePosition,
           });
-          obj.userData.baseScale = baseScale;
-          obj.userData.basePosition = basePosition;
+          obj.userData = {
+            ...obj.userData,
+            baseScale,
+            basePosition,
+            stepId: step.id,
+          };
+          obj.traverse((child: any) => {
+            child.userData = {
+              ...(child.userData ?? {}),
+              stepId: step.id,
+            };
+          });
           setHighlight(activeIdRef.current);
         },
         undefined,
@@ -210,6 +324,19 @@ export default function SimulationScene() {
     arrangedSteps.forEach(loadStep);
 
     const animate = () => {
+      rafRef.current = requestAnimationFrame(animate);
+
+      const cameraInstance = cameraRef.current;
+      const orbit = controlsRef.current;
+      const delta = animationClockRef.current.getDelta();
+      const lerpStep = Math.min(1, CAMERA_LERP_SPEED * delta);
+
+      if (cameraInstance && orbit) {
+        cameraInstance.position.lerp(targetCameraPositionRef.current, lerpStep);
+        orbit.target.lerp(targetOrbitRef.current, lerpStep);
+        orbit.update();
+      }
+
       controls.update();
 
       const activeId = activeIdRef.current;
@@ -241,7 +368,6 @@ export default function SimulationScene() {
       }
 
       renderer.render(scene, camera);
-      rafRef.current = requestAnimationFrame(animate);
     };
 
     animate();
@@ -261,6 +387,8 @@ export default function SimulationScene() {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", handleResize);
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
+      renderer.domElement.removeEventListener("pointerup", handlePointerUp);
       controls.dispose();
       renderer.dispose();
       arrangedSteps.forEach((step) => {

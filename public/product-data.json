@@ -1,8 +1,8 @@
 [
   {
     "lot": "LOT-6061",
-    "status": "process",
-    "activeMachineId": "furnace",
+    "status": "finish",
+    "activeMachineId": "rod-feeder",
     "averages": {
       "temperature": 74.5,
       "argon_pressure": 2.4,

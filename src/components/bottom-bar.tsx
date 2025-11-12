@@ -1,10 +1,15 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useSimulation,
   type SimulationVariant,
 } from "@/components/simulation/SimulationProvider";
+import ProductDataModal, {
+  type ProductDataResponse,
+} from "@/components/ProductDataModal";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const formatSeconds = (seconds: number) => {
   if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
@@ -17,6 +22,11 @@ const formatSeconds = (seconds: number) => {
 };
 
 function BottomBar() {
+  const [isProductModalOpen, setProductModalOpen] = useState(false);
+  const [productSuccessMessage, setProductSuccessMessage] = useState<
+    string | null
+  >(null);
+
   const {
     isSimulationMode,
     simulationVariant,
@@ -50,20 +60,6 @@ function BottomBar() {
     return steps[nextIndex];
   }, [activeMachineId, isRealtime, steps]);
 
-  const handleToggleSimulation = useCallback(() => {
-    if (isSimulationMode) {
-      stopSimulation();
-      return;
-    }
-    setSimulationVariant("sequence");
-    requestSimulationStart();
-  }, [
-    isSimulationMode,
-    requestSimulationStart,
-    stopSimulation,
-    setSimulationVariant,
-  ]);
-
   const handleVariantClick = useCallback(
     (variant: SimulationVariant) => {
       setSimulationVariant(variant);
@@ -71,9 +67,48 @@ function BottomBar() {
     [setSimulationVariant]
   );
 
-  const handleMonitoringModeClick = useCallback(() => {
-    setSimulationVariant("realtime");
-  }, [setSimulationVariant]);
+  const handleModeSwitchChange = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        if (!isSimulationMode) {
+          setSimulationVariant("sequence");
+          requestSimulationStart();
+        }
+        return;
+      }
+
+      if (isSimulationMode) {
+        stopSimulation();
+      }
+      setSimulationVariant("realtime");
+    },
+    [
+      isSimulationMode,
+      requestSimulationStart,
+      setSimulationVariant,
+      stopSimulation,
+    ]
+  );
+
+  const handleProductModalSuccess = useCallback(
+    (payload: ProductDataResponse) => {
+      setProductModalOpen(false);
+      setProductSuccessMessage(
+        `Data produk ${payload.lot} berhasil disimpan ke backend.`
+      );
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!productSuccessMessage) return;
+    const timeout = window.setTimeout(() => {
+      setProductSuccessMessage(null);
+    }, 6000);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [productSuccessMessage]);
 
   const statusLabel = useMemo(() => {
     const productName = selectedProduct?.productName;
@@ -132,29 +167,52 @@ function BottomBar() {
     return `${progressPercent}%`;
   }, [activeMachine, isRealtime, progressPercent]);
 
-  const buttonLabel = isSimulationMode
-    ? "Keluar Simulasi"
-    : isRealtime
-    ? "Mulai Realtime"
-    : "Jalankan Simulasi";
-  const isStartDisabled =
+  const isModeSwitchDisabled =
     !isSimulationMode && simulationVariant === "sequence" && flowsLoading;
-  const buttonClasses = isSimulationMode
-    ? "inline-flex items-center gap-2 rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-    : isRealtime
-    ? "inline-flex items-center gap-2 rounded-full border border-blue-500/40 bg-blue-500/5 px-4 py-2 text-sm font-semibold text-blue-200 transition hover:bg-blue-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-    : "inline-flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900";
-  const monitoringButtonClasses = isRealtime
-    ? "inline-flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-    : "inline-flex items-center gap-2 rounded-full border border-blue-500/40 bg-blue-500/5 px-4 py-2 text-sm font-semibold text-blue-200 transition hover:bg-blue-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900";
+
+  const baseModeButtonClass =
+    "h-8 rounded-full px-3 text-[11px] font-semibold uppercase tracking-[0.08em] transition disabled:opacity-50 disabled:pointer-events-none";
+  const monitoringButtonClass = cn(
+    baseModeButtonClass,
+    !isSimulationMode
+      ? "bg-blue-500/20 text-white hover:bg-blue-500/25"
+      : "bg-transparent text-slate-300 hover:bg-slate-700/40 hover:text-white"
+  );
+  const simulationButtonClass = cn(
+    baseModeButtonClass,
+    isSimulationMode
+      ? "bg-blue-500/20 text-white hover:bg-blue-500/25"
+      : "bg-transparent text-slate-300 hover:bg-slate-700/40 hover:text-white"
+  );
 
   return (
     <footer className="fixed bottom-4 bg-transparent left-1/2 z-50 w-[min(100%-2rem,48rem)] -translate-x-1/2 rounded-3xl px-6 py-4 text-slate-200">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-center gap-3">
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1 rounded-full bg-slate-800/60 p-1 shadow-inner">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleModeSwitchChange(false)}
+                className={monitoringButtonClass}
+              >
+                Monitoring
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleModeSwitchChange(true)}
+                disabled={isModeSwitchDisabled}
+                className={simulationButtonClass}
+              >
+                Simulasi
+              </Button>
+            </div>
             {isSimulationMode && (
-              <div className="flex items-center gap-1 rounded-full bg-slate-800/60 p-1 text-xs font-semibold text-slate-300 shadow-inner">
+              <div className="flex items-center gap-2 rounded-full bg-slate-800/60 p-1 text-xs font-semibold text-slate-300 shadow-inner">
                 {(
                   [
                     { value: "sequence", label: "Simulasi Biasa" },
@@ -163,18 +221,21 @@ function BottomBar() {
                 ).map((option) => {
                   const isActive = simulationVariant === option.value;
                   return (
-                    <button
+                    <Button
                       key={option.value}
                       type="button"
+                      size="sm"
+                      variant={isActive ? "default" : "ghost"}
                       onClick={() => handleVariantClick(option.value)}
-                      className={`rounded-full px-3 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                      className={cn(
+                        "h-8 rounded-full px-3 text-xs",
                         isActive
-                          ? "bg-blue-500 text-white"
+                          ? "bg-blue-500 text-white hover:bg-blue-400"
                           : "text-slate-300 hover:text-white"
-                      }`}
+                      )}
                     >
                       {option.label}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -185,24 +246,22 @@ function BottomBar() {
               </span>
             )}
             {!isSimulationMode && (
-              <button
+              <Button
                 type="button"
-                onClick={handleMonitoringModeClick}
-                className={monitoringButtonClasses}
+                variant="outline"
+                onClick={() => setProductModalOpen(true)}
+                className="rounded-full border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20"
               >
-                Monitoring mode
-              </button>
+                Tambah data produk
+              </Button>
             )}
-            <button
-              type="button"
-              onClick={handleToggleSimulation}
-              className={buttonClasses}
-              disabled={isStartDisabled}
-            >
-              {buttonLabel}
-            </button>
           </div>
         </div>
+        {productSuccessMessage && (
+          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-center text-xs font-medium text-emerald-200">
+            {productSuccessMessage}
+          </div>
+        )}
         {isSimulationMode && (
           <div className="flex flex-col gap-1">
             <div className="relative h-1 w-full overflow-hidden rounded-full bg-slate-700">
@@ -222,6 +281,11 @@ function BottomBar() {
           </div>
         )}
       </div>
+      <ProductDataModal
+        isOpen={isProductModalOpen}
+        onClose={() => setProductModalOpen(false)}
+        onSuccess={handleProductModalSuccess}
+      />
     </footer>
   );
 }
