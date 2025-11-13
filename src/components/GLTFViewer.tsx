@@ -14,6 +14,7 @@ import {
 import { createViewerControls, ViewerControlsAPI } from "./ViewerControls";
 import { mountModelModal, unmountModelModal } from "./ModelModal";
 import { ModelHoverTooltip, type ModelHoverInfo } from "./ModelHoverTooltip";
+import MachineStreamTooltips from "./simulation/MachineStreamTooltips";
 import type { MachineDetails } from "@/lib/machines";
 import { loadMachineById } from "@/lib/machines";
 
@@ -48,12 +49,18 @@ export default function GLTFViewer({
   configUrl = "/3d-model/models.json",
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [droneMode, setDroneMode] = useState(false);
+  // Drone mode has been removed — keep a static ref set to false for any legacy checks
   const [hoverInfo, setHoverInfo] = useState<ModelHoverInfo | null>(null);
+  const [containerSize, setContainerSize] = useState({
+    width: 1280,
+    height: 720,
+  });
   const hoverMachineCacheRef = useRef<Map<string, MachineDetails | null>>(
     new Map()
   );
   const hoverFetchRef = useRef<Map<string, boolean>>(new Map());
+  const objectsMapRef = useRef<Map<string, THREE.Object3D>>(new Map());
+  const cameraExternalRef = useRef<THREE.PerspectiveCamera | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -75,13 +82,15 @@ export default function GLTFViewer({
     const cameraRef = {
       current: camera,
     } as { current: THREE.PerspectiveCamera | null };
+    cameraExternalRef.current = camera;
+
+    const width = container.clientWidth || window.innerWidth || 1280;
+    const height = container.clientHeight || window.innerHeight || 720;
+    setContainerSize({ width, height });
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(
-      container.clientWidth,
-      container.clientHeight || window.innerHeight || 480
-    );
+    renderer.setSize(width, height);
     // enable shadows for a more realistic floor contact
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type =
@@ -111,6 +120,34 @@ export default function GLTFViewer({
     }
     scene.add(dir);
 
+    // Additional lighting to improve model readability and depth.
+    // Ambient light provides a soft base illumination so dark areas aren't fully black.
+    const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+    scene.add(ambient);
+
+    // Key point light: warm, bright source that simulates main studio light.
+    const keyLight = new THREE.PointLight(0xfff2e6, 0.9, 0, 2);
+    keyLight.position.set(5, 8, 5);
+    keyLight.castShadow = true;
+    try {
+      keyLight.shadow.mapSize.width = 1024;
+      keyLight.shadow.mapSize.height = 1024;
+      keyLight.shadow.radius = 4;
+    } catch (e) {
+      /* ignore if shadow props not writable */
+    }
+    scene.add(keyLight);
+
+    // Fill light: cool tint to balance warm key and reveal shadow details.
+    const fillLight = new THREE.PointLight(0x88aaff, 0.35, 0, 1);
+    fillLight.position.set(-6, 3, -4);
+    scene.add(fillLight);
+
+    // Rim/back light to create separation from background
+    const rimLight = new THREE.PointLight(0xffffff, 0.2, 0, 1);
+    rimLight.position.set(0, 6, -8);
+    scene.add(rimLight);
+
     // add a ground plane and grid helper to define the map floor
     const floorSize = 200;
     const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize);
@@ -131,7 +168,8 @@ export default function GLTFViewer({
     controls.target.set(0, 1, 0);
     controls.update();
     const controlsRef = { current: controls } as { current: any };
-    const droneModeRef = { current: droneMode } as { current: boolean };
+    // drone mode disabled: always false
+    const droneModeRef = { current: false } as { current: boolean };
     const targetCameraPosition = new THREE.Vector3().copy(camera.position);
     const targetOrbit = new THREE.Vector3().copy(controls.target);
     const animationClock = new THREE.Clock();
@@ -248,6 +286,8 @@ export default function GLTFViewer({
     // custom per-model animation handlers (e.g. arrow left->right motion)
     const customAnimations = new Map<string, ModelAnimation>();
     const clonedMaterials: THREE.Material[] = [];
+    // outlineMeshes holds temporary outline overlays for special models (e.g. floor)
+    const outlineMeshes: THREE.Mesh[] = [];
     const appliedTextures: THREE.Texture[] = [];
     // viewer controls (separate DOM panel) - provide deps for selection
     const controlsApi: ViewerControlsAPI = createViewerControls(container, {
@@ -461,6 +501,7 @@ export default function GLTFViewer({
             }
           });
           objects.delete(id);
+          objectsMapRef.current.delete(id);
         }
       }
 
@@ -559,6 +600,7 @@ export default function GLTFViewer({
 
           scene.add(obj);
           objects.set(m.id, obj);
+          objectsMapRef.current.set(m.id, obj);
           try {
             if (!obj.name) obj.name = m.id;
           } catch (e) {
@@ -571,6 +613,41 @@ export default function GLTFViewer({
               obj.userData.allowInteraction = false;
               if ("modelId" in obj.userData) delete obj.userData.modelId;
               obj.userData.clips = [];
+              // create a subtle glow/outline overlay for floor that does not affect
+              // scene lighting. Use MeshBasicMaterial which is unlit so it won't
+              // change lighting on other objects. We create slightly scaled
+              // back-facing meshes for a soft outline effect.
+              try {
+                obj.traverse((child: any) => {
+                  if (!child.isMesh) return;
+                  try {
+                    const geom = child.geometry;
+                    if (!geom) return;
+                    const outlineMat = new THREE.MeshBasicMaterial({
+                      color: 0x00aaff,
+                      transparent: true,
+                      opacity: 0.18,
+                      depthWrite: false,
+                      side: THREE.BackSide,
+                    });
+                    const outlineMesh = new THREE.Mesh(geom, outlineMat);
+                    outlineMesh.matrixAutoUpdate = false;
+                    outlineMesh.applyMatrix4(child.matrixWorld);
+                    // slightly enlarge to form an outline
+                    outlineMesh.scale.multiplyScalar(1.02);
+                    outlineMesh.renderOrder = (child.renderOrder || 0) - 1;
+                    // keep track for cleanup
+                    outlineMeshes.push(outlineMesh);
+                    scene.add(outlineMesh);
+                    // also track material for disposal
+                    clonedMaterials.push(outlineMat);
+                  } catch (e) {
+                    /* ignore outline creation errors */
+                  }
+                });
+              } catch (e) {
+                /* ignore */
+              }
             } else {
               if (typeof obj.userData.allowInteraction === "undefined") {
                 obj.userData.allowInteraction = true;
@@ -799,17 +876,7 @@ export default function GLTFViewer({
     const look = { yaw: camera.rotation.y, pitch: camera.rotation.x };
     const lookSens = 0.004; // sensitivity for right-drag look
 
-    const onPointerLockChange = () => {
-      pointerLocked = document.pointerLockElement === renderer.domElement;
-      // if pointer unlocked, exit drone mode
-      if (!pointerLocked) {
-        droneModeRef.current = false;
-        // notify React state via custom event
-        window.dispatchEvent(
-          new CustomEvent("__droneModeChanged", { detail: false })
-        );
-      }
-    };
+    // pointer lock change handling removed because drone mode is disabled
 
     const onMouseMove = (e: MouseEvent) => {
       const cam = cameraRef.current;
@@ -870,52 +937,32 @@ export default function GLTFViewer({
       // support both event.code and event.key for broader compatibility
       const code = e.code;
       const key = e.key;
-      const wasDrone = droneModeRef.current;
-      // if drone mode is active, prevent default for movement keys so inputs don't capture them
-      const preventWhenDrone = (shouldPrevent = true) => {
-        if (wasDrone && shouldPrevent) e.preventDefault();
-      };
+      // drone mode disabled; keyboard movement keys will update movementRef only
 
       switch (code) {
         case "KeyW":
           movementRef.current.forward = true;
-          preventWhenDrone();
           break;
         case "KeyS":
           movementRef.current.back = true;
-          preventWhenDrone();
           break;
         case "KeyA":
           movementRef.current.left = true;
-          preventWhenDrone();
           break;
         case "KeyD":
           movementRef.current.right = true;
-          preventWhenDrone();
           break;
         case "Space":
           movementRef.current.up = true;
-          preventWhenDrone();
           break;
         case "ShiftLeft":
         case "ShiftRight":
           movementRef.current.down = true;
-          preventWhenDrone();
-          break;
-        case "KeyM":
-          // toggle drone mode
-          try {
-            if (!droneModeRef.current) renderer.domElement.requestPointerLock();
-          } catch (err) {
-            /* ignore */
-          }
-          window.dispatchEvent(new CustomEvent("__toggleDroneMode"));
           break;
         default:
           // fallback checks using key (some browsers use key instead of code)
           if (key === "Shift") {
             movementRef.current.down = true;
-            preventWhenDrone();
           }
           break;
       }
@@ -952,7 +999,7 @@ export default function GLTFViewer({
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    document.addEventListener("pointerlockchange", onPointerLockChange);
+    // pointer lock change listener removed (drone mode disabled)
     document.addEventListener("mousemove", onMouseMove);
     // right-click drag handlers on the canvas
     renderer.domElement.addEventListener("mousedown", onMouseDown);
@@ -961,47 +1008,7 @@ export default function GLTFViewer({
     const preventContext = (ev: Event) => ev.preventDefault();
     renderer.domElement.addEventListener("contextmenu", preventContext);
 
-    const onToggleDrone = () => {
-      const next = !droneModeRef.current;
-      droneModeRef.current = next;
-      if (next) {
-        // disable orbit controls and request pointer lock
-        try {
-          controlsRef.current.enabled = false;
-          renderer.domElement.requestPointerLock();
-        } catch (e) {
-          /* ignore */
-        }
-      } else {
-        try {
-          document.exitPointerLock();
-        } catch (e) {
-          /* ignore */
-        }
-        controlsRef.current.enabled = true;
-      }
-      window.dispatchEvent(
-        new CustomEvent("__droneModeChanged", { detail: next })
-      );
-    };
-
-    window.addEventListener(
-      "__toggleDroneMode",
-      onToggleDrone as EventListener
-    );
-
-    // React state update bridge: listen for __droneModeChanged to update local React state
-    const onDroneModeChanged = (e: any) => {
-      try {
-        setDroneMode(Boolean(e.detail));
-      } catch (err) {
-        setDroneMode(false);
-      }
-    };
-    window.addEventListener(
-      "__droneModeChanged",
-      onDroneModeChanged as EventListener
-    );
+    // drone toggle and related custom events removed
 
     // watch for prop changes via a mutation observer on models array by polling in RAF tick.
     // Simpler approach: re-run update when `models` changes by using another effect below that
@@ -1225,6 +1232,7 @@ export default function GLTFViewer({
     const onResize = () => {
       const w = container.clientWidth || window.innerWidth;
       const h = container.clientHeight || window.innerHeight || 300;
+      setContainerSize({ width: w, height: h });
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -1255,16 +1263,9 @@ export default function GLTFViewer({
       } catch (e) {}
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      document.removeEventListener("pointerlockchange", onPointerLockChange);
+      // pointerlock listener removed previously
       document.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener(
-        "__toggleDroneMode",
-        onToggleDrone as EventListener
-      );
-      window.removeEventListener(
-        "__droneModeChanged",
-        onDroneModeChanged as EventListener
-      );
+      // drone-related event listeners removed
       window.removeEventListener(
         "__openModelModal",
         handleExternalOpen as EventListener
@@ -1321,6 +1322,20 @@ export default function GLTFViewer({
             // ignore
           }
         });
+        // remove and cleanup any outline overlay meshes we created for special
+        // models (we don't dispose geometry because it's shared with original meshes)
+        try {
+          outlineMeshes.forEach((om) => {
+            try {
+              if (om.parent) om.parent.remove(om);
+            } catch (e) {
+              /* ignore */
+            }
+          });
+          outlineMeshes.length = 0;
+        } catch (e) {
+          /* ignore */
+        }
         for (const anim of customAnimations.values()) {
           try {
             anim.dispose?.();
@@ -1353,6 +1368,12 @@ export default function GLTFViewer({
         }}
       />
       <ModelHoverTooltip info={hoverInfo} />
+      <MachineStreamTooltips
+        camera={cameraExternalRef.current}
+        machineObjects={objectsMapRef.current}
+        containerWidth={containerSize.width}
+        containerHeight={containerSize.height}
+      />
     </>
   );
 }

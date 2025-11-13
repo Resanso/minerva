@@ -133,8 +133,8 @@ function BottomBar() {
   const subStatusLabel = useMemo(() => {
     if (isRealtime) {
       return isSimulationMode
-        ? "Memantau status mesin dari data realtime (dummy JSON)"
-        : "Gunakan data realtime dummy untuk highlight mesin aktif.";
+        ? "Memantau status mesin dari stream InfluxDB."
+        : "Gunakan mode realtime untuk menyoroti mesin dari stream InfluxDB.";
     }
     if (!isSimulationMode) {
       if (flowsLoading) {
@@ -214,10 +214,7 @@ function BottomBar() {
             {isSimulationMode && (
               <div className="flex items-center gap-2 rounded-full bg-slate-800/60 p-1 text-xs font-semibold text-slate-300 shadow-inner">
                 {(
-                  [
-                    { value: "sequence", label: "Simulasi Biasa" },
-                    { value: "realtime", label: "Simulasi Realtime" },
-                  ] as const
+                  [{ value: "sequence", label: "Auto manufacture" }] as const
                 ).map((option) => {
                   const isActive = simulationVariant === option.value;
                   return (

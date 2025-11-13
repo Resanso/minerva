@@ -27,7 +27,36 @@ const toTitleCase = (text: string) =>
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const rawModels = models as RawModel[];
+// Normalize incoming JSON to the strict RawModel shape.
+// models.json can contain arrays typed as `number[]` (not fixed-length tuples),
+// so convert and validate them here instead of using an unsafe direct cast.
+const rawModels: RawModel[] = (models as unknown as any[]).map((m) => {
+  const position =
+    Array.isArray(m.position) && m.position.length === 3
+      ? ([m.position[0], m.position[1], m.position[2]] as [
+          number,
+          number,
+          number
+        ])
+      : undefined;
+
+  const rotation =
+    Array.isArray(m.rotation) && m.rotation.length === 3
+      ? ([m.rotation[0], m.rotation[1], m.rotation[2]] as [
+          number,
+          number,
+          number
+        ])
+      : undefined;
+
+  return {
+    id: String(m.id),
+    src: String(m.src),
+    position,
+    rotation,
+    scale: typeof m.scale === "number" ? m.scale : undefined,
+  };
+});
 
 const idUsage = new Map<string, number>();
 

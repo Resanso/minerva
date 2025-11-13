@@ -337,6 +337,9 @@ function ModelModal(props: ModelModalOptions) {
                 <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4">
                   {maintenanceItems.map((item) => {
                     const healthColors = getHealthColorClasses(item.health);
+                    // Prefer item.thumbnail, fallback to machine.previewImage when available
+                    const thumbSrc =
+                      item.thumbnail ?? machine?.previewImage ?? null;
                     return (
                       <article
                         key={item.part}
@@ -344,12 +347,21 @@ function ModelModal(props: ModelModalOptions) {
                       >
                         <div>
                           <div className="flex items-start gap-4">
-                            {item.thumbnail ? (
+                            {thumbSrc ? (
                               <img
-                                src={item.thumbnail}
+                                src={thumbSrc}
                                 alt={`${item.part} thumbnail`}
                                 // shrink-0 mencegah gambar penyet saat teks panjang
                                 className="h-20 w-20 shrink-0 rounded-lg bg-white/5 p-1 object-contain"
+                                loading="lazy"
+                                // fallback to a small inline SVG so user doesn't see the broken image icon
+                                onError={(e) => {
+                                  const img =
+                                    e.currentTarget as HTMLImageElement;
+                                  img.onerror = null;
+                                  img.src =
+                                    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='80'><rect width='100%' height='100%' fill='%230F172A'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23888' font-family='Arial' font-size='14'>No image</text></svg>";
+                                }}
                               />
                             ) : (
                               <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-white/5 text-center text-[11px] text-gray-400">

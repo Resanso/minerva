@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AskAiButton } from "@/components/AskAiButton";
+import ProductDataViewerModal from "@/components/ProductDataViewerModal";
+import LiveSensorTicker from "@/components/LiveSensorTicker";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -131,6 +133,7 @@ const createClientId = () => {
 export default function TopBar() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isProductModalOpen, setProductModalOpen] = useState(false);
   const notificationDropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -198,6 +201,26 @@ export default function TopBar() {
     };
   }, []);
 
+  // Open product modal when simulation is disabled elsewhere in the app
+  useEffect(() => {
+    const handler = () => setProductModalOpen(true);
+    try {
+      window.addEventListener("__simulationDisabled", handler as EventListener);
+    } catch (err) {
+      // ignore during SSR or if window is not available
+    }
+    return () => {
+      try {
+        window.removeEventListener(
+          "__simulationDisabled",
+          handler as EventListener
+        );
+      } catch (err) {
+        /* ignore */
+      }
+    };
+  }, []);
+
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.read).length,
     [notifications]
@@ -243,106 +266,122 @@ export default function TopBar() {
   };
 
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-6 z-40 flex justify-center bg-transparent">
-      <div className="pointer-events-auto flex h-14 w-full max-w-6xl items-center gap-6 bg-transparent px-6">
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="uppercase tracking-[0.18em] text-[10px] text-slate-300"
-          >
-            Nama Pabrik
-          </Badge>
-          <Badge className="bg-blue-500 text-white shadow-[0_0_18px_rgba(59,130,246,0.45)]">
-            Gedung E
-          </Badge>
-        </div>
+    <>
+      <header className="pointer-events-none fixed inset-x-0 top-6 z-40 flex justify-center bg-transparent">
+        <div className="pointer-events-auto flex h-14 w-full max-w-6xl items-center gap-6 bg-transparent px-6">
+          <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-3xl">
+            <Badge
+              variant="secondary"
+              className="uppercase tracking-[0.18em] text-[10px] text-slate-300"
+            >
+              Nama Pabrik
+            </Badge>
+            <Badge className="bg-blue-500 text-white shadow-[0_0_18px_rgba(59,130,246,0.45)]">
+              Smelter
+            </Badge>
+          </div>
 
-        <div className="ml-auto flex items-center gap-3">
-          <AskAiButton className="md:w-auto" />
-          <div ref={notificationDropdownRef} className="relative">
+          <LiveSensorTicker />
+
+          <div className="ml-auto flex items-center gap-3">
+            <AskAiButton className="md:w-auto" />
+            <Button
+              variant="outline"
+              className="uppercase tracking-[0.2em]"
+              onClick={() => setProductModalOpen(true)}
+            >
+              Data Produk
+            </Button>
+            <div ref={notificationDropdownRef} className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Notifications"
+                onClick={handleNotificationToggle}
+              >
+                <span className="relative inline-flex">
+                  <BellIcon className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                  )}
+                </span>
+              </Button>
+              {isNotificationsOpen && (
+                <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-slate-100">
+                      Notifications
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {unreadCount} unread
+                    </span>
+                  </div>
+                  <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {sortedNotifications.length ? (
+                      sortedNotifications.map((item) => {
+                        const visuals =
+                          severityVisuals[item.severity] ??
+                          severityVisuals.info;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleNotificationClick(item)}
+                            className="flex w-full flex-col gap-1 rounded-lg border border-white/5 bg-slate-900/60 px-3 py-2 text-left transition hover:border-blue-400/40 hover:bg-slate-800/80"
+                          >
+                            <div className="flex items-center justify-between text-xs">
+                              <div
+                                className={`flex items-center gap-2 font-semibold text-slate-100`}
+                              >
+                                <span
+                                  className={`h-2.5 w-2.5 rounded-full ${visuals.dot}`}
+                                />
+                                <span>{item.title}</span>
+                              </div>
+                              <span className="text-right text-[11px] text-slate-500">
+                                {formatTimestamp(item.timestamp)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-300">
+                              {item.message}
+                            </p>
+                            {item.machineId && (
+                              <span
+                                className={`text-[11px] uppercase tracking-[0.15em] ${visuals.pill}`}
+                              >
+                                {item.machineId}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-white/10 px-3 py-6 text-center text-sm text-slate-500">
+                        No notifications
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <Button variant="ghost" size="icon" aria-label="Profile">
+              <UserIcon className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
-              size="icon"
-              aria-label="Notifications"
-              onClick={handleNotificationToggle}
+              className="gap-2 px-4 text-slate-200 hover:text-white"
+              aria-label="Toggle theme"
             >
-              <span className="relative inline-flex">
-                <BellIcon className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-                )}
-              </span>
+              <MoonIcon className="h-4 w-4" />
+              <span className="text-sm font-medium">Dark</span>
             </Button>
-            {isNotificationsOpen && (
-              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-100">
-                    Notifications
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {unreadCount} unread
-                  </span>
-                </div>
-                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                  {sortedNotifications.length ? (
-                    sortedNotifications.map((item) => {
-                      const visuals =
-                        severityVisuals[item.severity] ?? severityVisuals.info;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => handleNotificationClick(item)}
-                          className="flex w-full flex-col gap-1 rounded-lg border border-white/5 bg-slate-900/60 px-3 py-2 text-left transition hover:border-blue-400/40 hover:bg-slate-800/80"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <div
-                              className={`flex items-center gap-2 font-semibold text-slate-100`}
-                            >
-                              <span
-                                className={`h-2.5 w-2.5 rounded-full ${visuals.dot}`}
-                              />
-                              <span>{item.title}</span>
-                            </div>
-                            <span className="text-right text-[11px] text-slate-500">
-                              {formatTimestamp(item.timestamp)}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-300">
-                            {item.message}
-                          </p>
-                          {item.machineId && (
-                            <span
-                              className={`text-[11px] uppercase tracking-[0.15em] ${visuals.pill}`}
-                            >
-                              {item.machineId}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-white/10 px-3 py-6 text-center text-sm text-slate-500">
-                      No notifications
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
-          <Button variant="ghost" size="icon" aria-label="Profile">
-            <UserIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            className="gap-2 px-4 text-slate-200 hover:text-white"
-            aria-label="Toggle theme"
-          >
-            <MoonIcon className="h-4 w-4" />
-            <span className="text-sm font-medium">Dark</span>
-          </Button>
         </div>
-      </div>
-    </header>
+      </header>
+      <ProductDataViewerModal
+        isOpen={isProductModalOpen}
+        onCloseAction={() => setProductModalOpen(false)}
+      />
+    </>
   );
 }

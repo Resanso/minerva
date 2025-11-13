@@ -53,14 +53,14 @@
           "predictive": "June 2024",
           "last": "January 2024",
           "health": 20,
-          "thumbnail": "/3d-model/textures/gear-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         },
         {
           "part": "Pulley",
           "predictive": "March 2024",
           "last": "December 2023",
           "health": 65,
-          "thumbnail": "/3d-model/textures/pulley-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -91,56 +91,56 @@
           "predictive": "March 2024",
           "last": "December 2023",
           "health": 80,
-          "thumbnail": "/3d-model/textures/platen-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         },
         {
           "part": "Combustion Fan",
           "predictive": "April 2024",
           "last": "October 2023",
           "health": 62,
-          "thumbnail": "/3d-model/textures/combustion-fan-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         },
         {
           "part": "Burner Nozzle",
           "predictive": "May 2024",
           "last": "November 2023",
           "health": 54,
-          "thumbnail": "/3d-model/textures/burner-nozzle-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         },
         {
           "part": "Thermocouple Array",
           "predictive": "June 2024",
           "last": "January 2024",
           "health": 71,
-          "thumbnail": "/3d-model/textures/thermocouple-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         },
         {
           "part": "Gas Valve Manifold",
           "predictive": "July 2024",
           "last": "February 2024",
           "health": 65,
-          "thumbnail": "/3d-model/textures/gas-valve-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         },
         {
           "part": "Circulation Blower",
           "predictive": "August 2024",
           "last": "January 2024",
           "health": 58,
-          "thumbnail": "/3d-model/textures/blower-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         },
         {
           "part": "Ignition Transformer",
           "predictive": "September 2024",
           "last": "March 2024",
           "health": 73,
-          "thumbnail": "/3d-model/textures/ignition-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         },
         {
           "part": "Exhaust Damper",
           "predictive": "October 2024",
           "last": "April 2024",
           "health": 69,
-          "thumbnail": "/3d-model/textures/damper-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -171,7 +171,7 @@
           "predictive": "October 2024",
           "last": "April 2024",
           "health": 69,
-          "thumbnail": "/3d-model/textures/damper-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -206,14 +206,14 @@
           "predictive": "March 2024",
           "last": "December 2023",
           "health": 43,
-          "thumbnail": "/3d-model/textures/valve-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         },
         {
           "part": "Podpora",
           "predictive": "June 2024",
           "last": "January 2024",
           "health": 68,
-          "thumbnail": "/3d-model/textures/podpora-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -267,7 +267,7 @@
           "predictive": "April 2024",
           "last": "January 2024",
           "health": 60,
-          "thumbnail": "/3d-model/textures/roller-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -348,7 +348,7 @@
           "predictive": "May 2024",
           "last": "November 2023",
           "health": 55,
-          "thumbnail": "/3d-model/textures/roller-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -383,7 +383,7 @@
           "predictive": "August 2024",
           "last": "February 2024",
           "health": 78,
-          "thumbnail": "/3d-model/textures/hydraulic-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -418,7 +418,7 @@
           "predictive": "July 2024",
           "last": "December 2023",
           "health": 48,
-          "thumbnail": "/3d-model/textures/conveyor-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -453,7 +453,7 @@
           "predictive": "September 2024",
           "last": "January 2024",
           "health": 82,
-          "thumbnail": "/3d-model/textures/roller-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -488,14 +488,14 @@
           "predictive": "June 2024",
           "last": "December 2023",
           "health": 52,
-          "thumbnail": "/3d-model/textures/chain-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         },
         {
           "part": "Hydraulic Pump",
           "predictive": "August 2024",
           "last": "February 2024",
           "health": 71,
-          "thumbnail": "/3d-model/textures/hydraulic-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -530,7 +530,7 @@
           "predictive": "October 2024",
           "last": "January 2024",
           "health": 86,
-          "thumbnail": "/3d-model/textures/auger-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -565,14 +565,14 @@
           "predictive": "May 2024",
           "last": "January 2024",
           "health": 47,
-          "thumbnail": "/3d-model/textures/saw-blade-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         },
         {
           "part": "Coolant Pump",
           "predictive": "July 2024",
           "last": "November 2023",
           "health": 69,
-          "thumbnail": "/3d-model/textures/pump-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -607,7 +607,7 @@
           "predictive": "December 2024",
           "last": "June 2023",
           "health": 74,
-          "thumbnail": "/3d-model/textures/load-cell-thumb.jpg"
+          "thumbnail": "/3d-model/bearing.jpg"
         }
       ],
       "prescriptiveMaintenance": {
@@ -642,7 +642,7 @@
           "predictive": "January 2025",
           "last": "January 2024",
           "health": 88,
-          "thumbnail": "/3d-model/textures/inspection-thumb.jpg"
+          "thumbnail": "/3d-model/motor.jpeg"
         }
       ],
       "prescriptiveMaintenance": {

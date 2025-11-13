@@ -671,6 +671,24 @@ export function SimulationProvider({
     ]
   );
 
+  // dispatch a window event when simulation transitions from running -> stopped
+  const prevIsSimulationRef = useRef<boolean>(isSimulationMode);
+  useEffect(() => {
+    const prev = prevIsSimulationRef.current;
+    if (prev && !isSimulationMode) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("__simulationDisabled", {
+            detail: { time: new Date().toISOString() },
+          })
+        );
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    prevIsSimulationRef.current = isSimulationMode;
+  }, [isSimulationMode]);
+
   return (
     <SimulationContext.Provider value={contextValue}>
       {children}

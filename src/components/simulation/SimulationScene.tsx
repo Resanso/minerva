@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { useSimulation } from "./SimulationProvider";
+import MachineStreamTooltips from "./MachineStreamTooltips";
 import type { SimulationStep } from "./simulation-data";
 
 type LoadedObject = {
@@ -14,7 +15,8 @@ type LoadedObject = {
 };
 
 const FLOOR_SIZE = 120;
-const CAMERA_LERP_SPEED = 2;
+// Increased to speed up camera movement toward targets
+const CAMERA_LERP_SPEED = 6;
 
 const normalizeObject = (object: THREE.Object3D, desiredSize = 1) => {
   const box = new THREE.Box3().setFromObject(object);
@@ -51,6 +53,11 @@ export default function SimulationScene() {
   const targetOrbitRef = useRef(new THREE.Vector3());
   const animationClockRef = useRef(new THREE.Clock());
 
+  const [containerSize, setContainerSize] = useState({
+    width: 1280,
+    height: 720,
+  });
+
   const { steps, activeMachineId } = useSimulation();
   const arrangedSteps = useMemo(() => prepareSteps(steps), [steps]);
 
@@ -67,6 +74,8 @@ export default function SimulationScene() {
 
     const width = container.clientWidth || window.innerWidth || 1280;
     const height = container.clientHeight || window.innerHeight || 720;
+
+    setContainerSize({ width, height });
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 200);
     camera.position.set(0, 6, 12);
@@ -299,8 +308,9 @@ export default function SimulationScene() {
             baseScale,
             basePosition,
           });
+          // ensure userData exists before spreading (avoid spreading undefined)
           obj.userData = {
-            ...obj.userData,
+            ...(obj.userData ?? {}),
             baseScale,
             basePosition,
             stepId: step.id,
@@ -346,24 +356,26 @@ export default function SimulationScene() {
       ] of objectsRef.current) {
         const goalScale = modelId === activeId ? baseScale * 1.12 : baseScale;
         const currentScale = object.scale.x;
-        const nextScale = THREE.MathUtils.lerp(currentScale, goalScale, 0.12);
+        // faster scale interpolation for snappier focus transitions
+        const nextScale = THREE.MathUtils.lerp(currentScale, goalScale, 0.28);
         object.scale.setScalar(nextScale);
 
         const targetHeight = basePosition.y + (modelId === activeId ? 0.35 : 0);
+        // faster position interpolation for more responsive movement
         object.position.x = THREE.MathUtils.lerp(
           object.position.x,
           basePosition.x,
-          0.12
+          0.28
         );
         object.position.z = THREE.MathUtils.lerp(
           object.position.z,
           basePosition.z,
-          0.12
+          0.28
         );
         object.position.y = THREE.MathUtils.lerp(
           object.position.y,
           targetHeight,
-          0.12
+          0.28
         );
       }
 
@@ -376,6 +388,7 @@ export default function SimulationScene() {
       if (!containerRef.current) return;
       const w = containerRef.current.clientWidth || window.innerWidth;
       const h = containerRef.current.clientHeight || window.innerHeight;
+      setContainerSize({ width: w, height: h });
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -469,10 +482,18 @@ export default function SimulationScene() {
   }, [activeMachineId]);
 
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0"
-      style={{ minHeight: "100vh", width: "100%" }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{ minHeight: "100vh", width: "100%" }}
+      />
+      <MachineStreamTooltips
+        camera={cameraRef.current}
+        machineObjects={objectsRef.current}
+        containerWidth={containerSize.width}
+        containerHeight={containerSize.height}
+      />
+    </>
   );
 }

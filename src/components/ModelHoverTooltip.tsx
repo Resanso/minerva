@@ -53,13 +53,13 @@ export function ModelHoverTooltip({ info }: ModelHoverTooltipProps) {
         <TooltipContent
           side="top"
           sideOffset={12}
-          className="max-w-[220px] space-y-1"
+          className="max-w-[220px] space-y-1 bg-slate-900 border-none text-white"
         >
-          <p className="text-sm font-semibold leading-tight">
+          <p className="text-sm font-semibold text-white leading-tight">
             {machine?.title ?? info.id}
           </p>
           {machine ? (
-            <div className="space-y-1 text-xs text-background/80">
+            <div className="space-y-1 text-xs text-white">
               <p>Location: {machine.location || "-"}</p>
               <p>
                 Health Score:{" "}

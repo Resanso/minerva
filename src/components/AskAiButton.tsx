@@ -22,6 +22,102 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+// Minimal, safe markdown -> HTML renderer for chatbot answers.
+// Supports headings, bold, italic, inline code, code blocks, lists and links.
+function escapeHtml(str: string) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function renderMarkdownToHtml(md: string | null) {
+  if (!md) return "";
+  // Normalize line endings
+  let text = md.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  // Escape first to avoid HTML injection
+  text = escapeHtml(text);
+
+  // Code blocks: ```lang\n...``` --> <pre><code>...</code></pre>
+  text = text.replace(/```([\s\S]*?)```/g, (_m, code) => {
+    return `<pre class="rounded-md bg-slate-950/80 p-3 overflow-auto"><code>${code
+      .replace(/&lt;/g, "&lt;")
+      .replace(/&gt;/g, "&gt;")}</code></pre>`;
+  });
+
+  // Inline code: `code`
+  text = text.replace(/`([^`]+)`/g, (_m, code) => {
+    return `<code class="rounded px-1 bg-slate-800/60 text-xs">${code}</code>`;
+  });
+
+  // Headings: #### to <h4>
+  text = text.replace(
+    /^###### (.*)$/gm,
+    '<h6 class="text-sm font-semibold">$1</h6>'
+  );
+  text = text.replace(
+    /^##### (.*)$/gm,
+    '<h5 class="text-base font-semibold">$1</h5>'
+  );
+  text = text.replace(
+    /^#### (.*)$/gm,
+    '<h4 class="text-lg font-semibold">$1</h4>'
+  );
+  text = text.replace(
+    /^### (.*)$/gm,
+    '<h3 class="text-lg font-semibold">$1</h3>'
+  );
+  text = text.replace(
+    /^## (.*)$/gm,
+    '<h2 class="text-lg font-semibold">$1</h2>'
+  );
+  text = text.replace(
+    /^# (.*)$/gm,
+    '<h1 class="text-xl font-semibold">$1</h1>'
+  );
+
+  // Bold **text** and __text__
+  text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/__(.*?)__/g, "<strong>$1</strong>");
+
+  // Italic *text* or _text_
+  text = text.replace(/\*(.*?)\*/g, "<em>$1</em>");
+  text = text.replace(/_(.*?)_/g, "<em>$1</em>");
+
+  // Links [text](url)
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => {
+    const safeUrl = url.replace(/"/g, "%22");
+    return `<a class=\"text-blue-300 underline\" href=\"${safeUrl}\" target=\"_blank\" rel=\"noreferrer\">${label}</a>`;
+  });
+
+  // Unordered lists: lines starting with - or *
+  // Convert consecutive list lines into a single <ul>
+  text = text.replace(/(^|\n)(?:[ \t]*[-\*] .+(?:\n|$))+?/g, (block) => {
+    const items = block
+      .trim()
+      .split(/\n/)
+      .map((l) => l.replace(/^[ \t]*[-\*] /, ""))
+      .map((li) => `<li class=\"ml-4 list-disc\">${li}</li>`)
+      .join("");
+    return `\n<ul class=\"mt-2\">${items}</ul>\n`;
+  });
+
+  // Paragraphs: separate by double newlines
+  const parts = text.split(/\n{2,}/).map((p) => p.trim());
+  const html = parts
+    .map((p) => {
+      if (p.startsWith("<h") || p.startsWith("<ul") || p.startsWith("<pre"))
+        return p;
+      return `<p class=\"mt-2\">${p.replace(/\n/g, "<br />")}</p>`;
+    })
+    .join("\n");
+
+  return html;
+}
+
 const SparklesIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg
     viewBox="0 0 24 24"
@@ -143,7 +239,7 @@ export function AskAiButton({ className }: { className?: string }) {
       <DialogContent className="p-6">
         <div className="flex flex-col gap-6">
           <DialogHeader>
-            <DialogTitle>Tanyakan ke Minerva AI</DialogTitle>
+            <DialogTitle>Ask AI</DialogTitle>
             <DialogDescription>
               Ajukan pertanyaan tentang performa mesin. Sistem akan menyusun
               query Flux dan menjawab berdasarkan data InfluxDB.
@@ -182,9 +278,13 @@ export function AskAiButton({ className }: { className?: string }) {
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
                   Jawaban
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">
-                  {answer}
-                </p>
+                <div
+                  className="mt-2 text-sm text-slate-200 prose prose-invert max-w-full"
+                  // Render minimal markdown produced by backend; helper escapes HTML.
+                  dangerouslySetInnerHTML={{
+                    __html: renderMarkdownToHtml(answer),
+                  }}
+                />
               </div>
               {fluxQuery && (
                 <div>
