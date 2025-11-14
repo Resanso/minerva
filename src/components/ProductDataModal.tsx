@@ -28,13 +28,14 @@ export type ProductDataResponse = {
 
 type ProductDataModalProps = {
   isOpen: boolean;
-  onClose: () => void;
+  // name with Action suffix so Next.js client serialization accepts it
+  onCloseAction: () => void;
   onSuccess?: (payload: ProductDataResponse) => void;
 };
 
 export default function ProductDataModal({
   isOpen,
-  onClose,
+  onCloseAction,
   onSuccess,
 }: ProductDataModalProps) {
   const [lotNumber, setLotNumber] = useState("");
@@ -79,7 +80,7 @@ export default function ProductDataModal({
       const json = (await response.json()) as ProductDataResponse;
       onSuccess?.(json);
       resetForm();
-      onClose();
+      onCloseAction();
     } catch (err) {
       console.error("Failed to submit product data", err);
       setError(
@@ -88,14 +89,14 @@ export default function ProductDataModal({
     } finally {
       setSubmitting(false);
     }
-  }, [canSubmit, isSubmitting, lotNumber, onClose, onSuccess, resetForm]);
+  }, [canSubmit, isSubmitting, lotNumber, onCloseAction, onSuccess, resetForm]);
 
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          onClose();
+          onCloseAction();
         }
       }}
     >
@@ -145,7 +146,7 @@ export default function ProductDataModal({
           <Button
             variant="flat"
             className="bg-slate-800/60 text-slate-200"
-            onPress={onClose}
+            onPress={onCloseAction}
             isDisabled={isSubmitting}
           >
             Batal

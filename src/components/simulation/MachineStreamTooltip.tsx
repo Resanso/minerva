@@ -11,9 +11,9 @@ type MachineStreamTooltipProps = {
 
 const formatValue = (value: number, sensorName: string) => {
   if (!Number.isFinite(value)) return "-";
-  
+
   const sensorLower = sensorName.toLowerCase();
-  
+
   if (sensorLower.includes("temperature") || sensorLower.includes("temp")) {
     return `${value.toFixed(1)}°C`;
   }
@@ -35,7 +35,7 @@ const formatValue = (value: number, sensorName: string) => {
   if (sensorLower.includes("accuracy")) {
     return `${value.toFixed(2)}%`;
   }
-  
+
   if (Math.abs(value) >= 1000) {
     return value.toFixed(0);
   }
@@ -53,9 +53,9 @@ export default function MachineStreamTooltip({
     );
   }, [machineName, readings]);
 
-  if (machineReadings.length === 0) {
-    return null;
-  }
+  // Always render the tooltip header (so highlighted models show a label even
+  // if there are no sensor readings). If there are no readings, render a
+  // placeholder row showing unavailable accuracy.
 
   return (
     <div
@@ -73,17 +73,24 @@ export default function MachineStreamTooltip({
         </span>
       </div>
       <div className="flex flex-col gap-1">
-        {machineReadings.map((reading) => (
-          <div
-            key={reading.id}
-            className="flex items-center justify-between gap-3 text-xs"
-          >
-            <span className="text-slate-300">{reading.sensorName}</span>
-            <span className="font-semibold text-blue-200">
-              {formatValue(reading.value, reading.sensorName)}
-            </span>
+        {machineReadings.length > 0 ? (
+          machineReadings.map((reading) => (
+            <div
+              key={reading.id}
+              className="flex items-center justify-between gap-3 text-xs"
+            >
+              <span className="text-slate-300">{reading.sensorName}</span>
+              <span className="font-semibold text-blue-200">
+                {formatValue(reading.value, reading.sensorName)}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="text-slate-300">Accuracy</span>
+            <span className="font-semibold text-blue-200">-</span>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

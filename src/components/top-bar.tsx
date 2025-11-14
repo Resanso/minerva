@@ -201,25 +201,11 @@ export default function TopBar() {
     };
   }, []);
 
-  // Open product modal when simulation is disabled elsewhere in the app
-  useEffect(() => {
-    const handler = () => setProductModalOpen(true);
-    try {
-      window.addEventListener("__simulationDisabled", handler as EventListener);
-    } catch (err) {
-      // ignore during SSR or if window is not available
-    }
-    return () => {
-      try {
-        window.removeEventListener(
-          "__simulationDisabled",
-          handler as EventListener
-        );
-      } catch (err) {
-        /* ignore */
-      }
-    };
-  }, []);
+  // NOTE: previously this component opened the Product Data modal when
+  // the global "__simulationDisabled" event was dispatched. That caused
+  // the ProductData modal to appear automatically after a simulation
+  // finished. We intentionally remove that behavior so only the
+  // SimulationResult modal is shown when simulations complete.
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.read).length,

@@ -8,6 +8,8 @@ import {
 import ProductDataModal, {
   type ProductDataResponse,
 } from "@/components/ProductDataModal";
+import AutonomousStartConfirmModal from "./simulation/AutonomousStartConfirmModal";
+import AutonomousResultModal from "./simulation/AutonomousResultModal";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,13 @@ function BottomBar() {
   const [productSuccessMessage, setProductSuccessMessage] = useState<
     string | null
   >(null);
+  const [isAutonomousConfirmOpen, setAutonomousConfirmOpen] = useState(false);
+  const [isAutonomousResultOpen, setAutonomousResultOpen] = useState(false);
+  const [isAutonomousRunning, setAutonomousRunning] = useState(false);
+  const [autonomousSimResult, setAutonomousSimResult] = useState<
+    import("./simulation/SimulationProvider").RealtimeResult | null
+  >(null);
+  const [autonomousRealData, setAutonomousRealData] = useState<any>(null);
 
   const {
     isSimulationMode,
@@ -41,6 +50,7 @@ function BottomBar() {
     flowsLoading,
     flowsError,
     selectedProduct,
+    realtimeResult,
   } = useSimulation();
 
   const isRealtime = simulationVariant === "realtime";
@@ -170,6 +180,48 @@ function BottomBar() {
   const isModeSwitchDisabled =
     !isSimulationMode && simulationVariant === "sequence" && flowsLoading;
 
+  // When autonomous mode is started, we wait until the provider finishes the
+  // simulation (realtimeResult is set and isSimulationMode becomes false),
+  // then fetch real sensor data and show the autonomous result modal.
+  useEffect(() => {
+    if (!isAutonomousRunning) return;
+    if (isSimulationMode) return; // still running
+    if (!realtimeResult) return; // wait for result
+
+    let active = true;
+    (async () => {
+      try {
+        const resp = await fetch("/product-data.json", { cache: "no-store" });
+        if (!resp.ok) throw new Error(resp.statusText);
+        const json = await resp.json();
+        if (!active) return;
+        const entries = Array.isArray(json) ? json : json ? [json] : [];
+        const real = entries.length > 0 ? entries[0] : null;
+        setAutonomousSimResult(realtimeResult);
+        setAutonomousRealData(real);
+        setAutonomousResultOpen(true);
+      } catch (err) {
+        // still show sim result even if real sensor fetch failed
+        setAutonomousSimResult(realtimeResult);
+        setAutonomousRealData(null);
+        setAutonomousResultOpen(true);
+      } finally {
+        // notify listeners that autonomous mode finished
+        try {
+          window.dispatchEvent(new CustomEvent("__autonomousStopped"));
+        } catch (err) {
+          /* ignore */
+        }
+
+        setAutonomousRunning(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isAutonomousRunning, isSimulationMode, realtimeResult]);
+
   const baseModeButtonClass =
     "h-8 rounded-full px-3 text-[11px] font-semibold uppercase tracking-[0.08em] transition disabled:opacity-50 disabled:pointer-events-none";
   const monitoringButtonClass = cn(
@@ -210,6 +262,16 @@ function BottomBar() {
               >
                 Simulasi
               </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setAutonomousConfirmOpen(true)}
+                disabled={isModeSwitchDisabled}
+                className={simulationButtonClass}
+              >
+                Autonomus
+              </Button>
             </div>
             {isSimulationMode && (
               <div className="flex items-center gap-2 rounded-full bg-slate-800/60 p-1 text-xs font-semibold text-slate-300 shadow-inner">
@@ -217,23 +279,7 @@ function BottomBar() {
                   [{ value: "sequence", label: "Auto manufacture" }] as const
                 ).map((option) => {
                   const isActive = simulationVariant === option.value;
-                  return (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      size="sm"
-                      variant={isActive ? "default" : "ghost"}
-                      onClick={() => handleVariantClick(option.value)}
-                      className={cn(
-                        "h-8 rounded-full px-3 text-xs",
-                        isActive
-                          ? "bg-blue-500 text-white hover:bg-blue-400"
-                          : "text-slate-300 hover:text-white"
-                      )}
-                    >
-                      {option.label}
-                    </Button>
-                  );
+                  return null;
                 })}
               </div>
             )}
@@ -280,8 +326,32 @@ function BottomBar() {
       </div>
       <ProductDataModal
         isOpen={isProductModalOpen}
-        onClose={() => setProductModalOpen(false)}
+        onCloseAction={() => setProductModalOpen(false)}
         onSuccess={handleProductModalSuccess}
+      />
+      <AutonomousStartConfirmModal
+        isOpen={isAutonomousConfirmOpen}
+        onCloseAction={() => setAutonomousConfirmOpen(false)}
+        onConfirmAction={() => {
+          // start autonomous run (use sequence behavior)
+          setAutonomousConfirmOpen(false);
+          // notify other components that autonomous mode is starting
+          try {
+            window.dispatchEvent(new CustomEvent("__autonomousStarted"));
+          } catch (err) {
+            /* ignore */
+          }
+
+          setAutonomousRunning(true);
+          setSimulationVariant("sequence");
+          requestSimulationStart();
+        }}
+      />
+      <AutonomousResultModal
+        isOpen={isAutonomousResultOpen}
+        simResult={autonomousSimResult}
+        real={autonomousRealData}
+        onCloseAction={() => setAutonomousResultOpen(false)}
       />
     </footer>
   );

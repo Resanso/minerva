@@ -58,6 +58,15 @@ export default function SimulationScene() {
     height: 720,
   });
 
+  // local flag to show all machine tooltips (used for autonomous mode)
+  const [isAutonomousMode, setIsAutonomousMode] = useState(false);
+  // bump this when models are added/removed so the component re-renders and
+  // child tooltip logic can pick up changes to `objectsRef` (Map mutations
+  // don't trigger renders by themselves).
+  const [modelsVersion, setModelsVersion] = useState(0);
+  // attach global autonomous start/stop listeners
+  useAutonomousFlag(setIsAutonomousMode);
+
   const { steps, activeMachineId } = useSimulation();
   const arrangedSteps = useMemo(() => prepareSteps(steps), [steps]);
 
@@ -308,6 +317,8 @@ export default function SimulationScene() {
             baseScale,
             basePosition,
           });
+          // trigger a re-render so consumers of objectsRef (tooltips) update
+          setModelsVersion((v) => v + 1);
           // ensure userData exists before spreading (avoid spreading undefined)
           obj.userData = {
             ...(obj.userData ?? {}),
@@ -493,7 +504,35 @@ export default function SimulationScene() {
         machineObjects={objectsRef.current}
         containerWidth={containerSize.width}
         containerHeight={containerSize.height}
+        showAll={isAutonomousMode}
       />
     </>
   );
 }
+
+// Listen for global autonomous start/stop events dispatched by the UI
+// (e.g. the bottom bar) so the scene can toggle the multi-tooltip mode.
+function useAutonomousFlag(
+  setter: React.Dispatch<React.SetStateAction<boolean>>
+) {
+  useEffect(() => {
+    const onStart = () => setter(true);
+    const onStop = () => setter(false);
+    window.addEventListener("__autonomousStarted", onStart as EventListener);
+    window.addEventListener("__autonomousStopped", onStop as EventListener);
+    return () => {
+      window.removeEventListener(
+        "__autonomousStarted",
+        onStart as EventListener
+      );
+      window.removeEventListener(
+        "__autonomousStopped",
+        onStop as EventListener
+      );
+    };
+  }, [setter]);
+}
+
+// Attach the autonomous listeners inside the module so the hook can run when
+// the component mounts.
+// (We call it from the component body above via the setter.)

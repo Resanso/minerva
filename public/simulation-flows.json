@@ -11,20 +11,28 @@
       "materialMix": "Primary Ingot"
     },
     "flow": [
-      { "machineId": "rod-feeder", "name": "Rod Feeding", "duration": 10 },
-      { "machineId": "furnace", "name": "Melting Furnace", "duration": 18 },
+      { "machineId": "rod-feeder", "name": "Rod Feeder", "duration": 3 },
+      { "machineId": "furnace", "name": "Furnace A", "duration": 3 },
+      { "machineId": "furnace2", "name": "Furnace B", "duration": 3 },
+      {
+        "machineId": "charging-machine",
+        "name": "Charging Machine",
+        "duration": 3
+      },
       {
         "machineId": "casting-machine",
-        "name": "Continuous Casting",
-        "duration": 15
+        "name": "Casting Machine",
+        "duration": 3
       },
-      {
-        "machineId": "homogenizing",
-        "name": "Homogenizing Furnace",
-        "duration": 20
-      },
-      { "machineId": "ut", "name": "Ultrasonic Testing", "duration": 9 },
-      { "machineId": "storage", "name": "Warehouse Buffer A", "duration": 6 }
+      { "machineId": "ct-1", "name": "Cooling Tower 1", "duration": 3 },
+      { "machineId": "ct-2", "name": "Cooling Tower 2", "duration": 3 },
+      { "machineId": "ct-3", "name": "Cooling Tower 3", "duration": 3 },
+      { "machineId": "ct-4", "name": "Cooling Tower 4", "duration": 3 },
+      { "machineId": "homogenizing", "name": "Homogenizing", "duration": 3 },
+      { "machineId": "ut", "name": "Ultrasonic Testing", "duration": 3 },
+      { "machineId": "swarf", "name": "Swarf Separator", "duration": 3 },
+      { "machineId": "sawing", "name": "Sawing Station", "duration": 3 },
+      { "machineId": "weightning", "name": "Weighing Station", "duration": 3 }
     ]
   },
   {
@@ -39,21 +47,36 @@
       "materialMix": "Recycled Blend"
     },
     "flow": [
-      { "machineId": "rod-feeder", "name": "Rod Loading", "duration": 12 },
-      { "machineId": "furnace2", "name": "Melting Furnace B", "duration": 22 },
+      { "machineId": "rod-feeder", "name": "Rod Feeder", "duration": 8 },
+      { "machineId": "furnace", "name": "Furnace A", "duration": 14 },
+      { "machineId": "furnace2", "name": "Furnace B", "duration": 14 },
       {
         "machineId": "charging-machine",
         "name": "Charging Machine",
-        "duration": 14
+        "duration": 12
       },
       {
         "machineId": "casting-machine",
-        "name": "Casting Cell",
+        "name": "Casting Machine",
         "duration": 16
       },
+      { "machineId": "homogenizing", "name": "Homogenizing", "duration": 12 },
+      { "machineId": "ut", "name": "Ultrasonic Testing", "duration": 9 },
       { "machineId": "swarf", "name": "Swarf Separator", "duration": 8 },
-      { "machineId": "weightning", "name": "Weighing Station", "duration": 5 },
-      { "machineId": "storage-2", "name": "Warehouse Buffer B", "duration": 7 }
+      { "machineId": "sawing", "name": "Sawing Station", "duration": 7 },
+      { "machineId": "weightning", "name": "Weighing Station", "duration": 6 },
+      { "machineId": "ct-1", "name": "Cooling Tower 1", "duration": 10 },
+      { "machineId": "ct-2", "name": "Cooling Tower 2", "duration": 10 },
+      { "machineId": "ct-3", "name": "Cooling Tower 3", "duration": 10 },
+      { "machineId": "ct-4", "name": "Cooling Tower 4", "duration": 10 },
+      { "machineId": "storage", "name": "Storage A", "duration": 6 },
+      { "machineId": "storage-2", "name": "Storage B", "duration": 6 },
+      { "machineId": "storage-3", "name": "Storage C", "duration": 6 },
+      { "machineId": "storage-4", "name": "Storage D", "duration": 6 },
+      { "machineId": "storage-5", "name": "Storage E", "duration": 6 },
+      { "machineId": "storage-6", "name": "Storage F", "duration": 6 },
+      { "machineId": "storage-7", "name": "Storage G", "duration": 6 },
+      { "machineId": "storage-8", "name": "Storage H", "duration": 6 }
     ]
   },
   {
@@ -68,15 +91,36 @@
       "materialMix": "Cathode Blend"
     },
     "flow": [
-      { "machineId": "rod-feeder", "name": "Rod Feed", "duration": 8 },
-      { "machineId": "sawing", "name": "Sawing Station", "duration": 6 },
-      { "machineId": "weightning", "name": "Weight Check", "duration": 5 },
-      { "machineId": "ut", "name": "Ultrasonic QC", "duration": 7 },
+      { "machineId": "rod-feeder", "name": "Rod Feeder", "duration": 8 },
+      { "machineId": "furnace", "name": "Furnace A", "duration": 14 },
+      { "machineId": "furnace2", "name": "Furnace B", "duration": 14 },
+      {
+        "machineId": "charging-machine",
+        "name": "Charging Machine",
+        "duration": 12
+      },
+      {
+        "machineId": "casting-machine",
+        "name": "Casting Machine",
+        "duration": 16
+      },
+      { "machineId": "homogenizing", "name": "Homogenizing", "duration": 12 },
+      { "machineId": "ut", "name": "Ultrasonic Testing", "duration": 9 },
+      { "machineId": "swarf", "name": "Swarf Separator", "duration": 8 },
+      { "machineId": "sawing", "name": "Sawing Station", "duration": 7 },
+      { "machineId": "weightning", "name": "Weighing Station", "duration": 6 },
       { "machineId": "ct-1", "name": "Cooling Tower 1", "duration": 10 },
       { "machineId": "ct-2", "name": "Cooling Tower 2", "duration": 10 },
       { "machineId": "ct-3", "name": "Cooling Tower 3", "duration": 10 },
       { "machineId": "ct-4", "name": "Cooling Tower 4", "duration": 10 },
-      { "machineId": "storage-3", "name": "Final Storage", "duration": 6 }
+      { "machineId": "storage", "name": "Storage A", "duration": 6 },
+      { "machineId": "storage-2", "name": "Storage B", "duration": 6 },
+      { "machineId": "storage-3", "name": "Storage C", "duration": 6 },
+      { "machineId": "storage-4", "name": "Storage D", "duration": 6 },
+      { "machineId": "storage-5", "name": "Storage E", "duration": 6 },
+      { "machineId": "storage-6", "name": "Storage F", "duration": 6 },
+      { "machineId": "storage-7", "name": "Storage G", "duration": 6 },
+      { "machineId": "storage-8", "name": "Storage H", "duration": 6 }
     ]
   },
   {

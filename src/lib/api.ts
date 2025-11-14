@@ -14,7 +14,7 @@ const normalizeBase = (value: string) => {
   }
 };
 
-const baseUrl = normalizeBase(BASE) || "http://localhost:8080";
+const baseUrl = normalizeBase(BASE) || "https://minerva-api-go.fly.dev/";
 
 export const apiBaseUrl = baseUrl;
 

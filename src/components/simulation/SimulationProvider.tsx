@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import SimulationResultModal from "./SimulationResultModal";
 import {
   simulationSteps,
   type SimulationStep,
@@ -36,6 +37,7 @@ export type ProductFlowDefinition = {
 export type SimulationConfiguratorFormValues = {
   general: {
     lot?: string;
+
     derivative?: string;
     diameter?: string;
     moltenState?: string;
@@ -103,7 +105,7 @@ type ProductDataEntry = {
   updatedAt?: string | null;
 };
 
-type RealtimeResult = {
+export type RealtimeResult = {
   lot: string;
   status: ProductDataStatus;
   averages: Record<string, number | string>;
@@ -360,10 +362,74 @@ export function SimulationProvider({
     startTimeRef.current = performance.now();
 
     if (simulationVariant === "sequence") {
-      const tick = () => {
+      const tick = async () => {
         if (cancelled || startTimeRef.current == null) return;
         const now = performance.now();
         const elapsed = (now - startTimeRef.current) / 1000;
+
+        // If we've reached or passed the total duration, finish the simulation
+        if (totalDuration > 0 && elapsed >= totalDuration) {
+          // mark final step as active and progress 100%
+          const last = currentSteps[currentSteps.length - 1];
+          if (last) {
+            setActiveMachineId(last.id);
+          } else {
+            setActiveMachineId(null);
+          }
+          setStepProgress(1);
+          setElapsedSeconds(totalDuration);
+
+          // attempt to load simulation result JSON and surface it
+          try {
+            const resp = await fetch("/simulation-results.json", {
+              cache: "no-store",
+            });
+            if (resp.ok) {
+              const json = await resp.json();
+              const result: RealtimeResult = {
+                lot: typeof json?.lot === "string" ? json.lot : "-",
+                status: json?.status === "finish" ? "finish" : "process",
+                averages:
+                  typeof json?.averages === "object" ? json.averages : {},
+                operationHour:
+                  typeof json?.operationHour === "number" ||
+                  typeof json?.operationHour === "string"
+                    ? String(json.operationHour)
+                    : null,
+                goodProduct:
+                  typeof json?.goodProduct === "number"
+                    ? json.goodProduct
+                    : typeof json?.goodProduct === "string"
+                    ? Number.parseInt(json.goodProduct, 10) || null
+                    : null,
+                defectProduct:
+                  typeof json?.defectProduct === "number"
+                    ? json.defectProduct
+                    : typeof json?.defectProduct === "string"
+                    ? Number.parseInt(json.defectProduct, 10) || null
+                    : null,
+                conclusion:
+                  typeof json?.conclusion === "string"
+                    ? json.conclusion
+                    : "Simulation finished.",
+                updatedAt:
+                  typeof json?.updatedAt === "string"
+                    ? json.updatedAt
+                    : undefined,
+              };
+              setRealtimeResult(result);
+            }
+          } catch (err) {
+            /* ignore */
+          }
+
+          // stop simulation and clear timers
+          clearTimers();
+          startTimeRef.current = null;
+          setSimulationMode(false);
+          return;
+        }
+
         computeState(elapsed);
       };
 
@@ -676,15 +742,59 @@ export function SimulationProvider({
   useEffect(() => {
     const prev = prevIsSimulationRef.current;
     if (prev && !isSimulationMode) {
-      try {
-        window.dispatchEvent(
-          new CustomEvent("__simulationDisabled", {
-            detail: { time: new Date().toISOString() },
-          })
-        );
-      } catch (err) {
-        /* ignore */
-      }
+      (async () => {
+        try {
+          const resp = await fetch("/simulation-results.json", {
+            cache: "no-store",
+          });
+          if (resp.ok) {
+            const json = await resp.json();
+            const result: RealtimeResult = {
+              lot: typeof json?.lot === "string" ? json.lot : "-",
+              status: json?.status === "finish" ? "finish" : "process",
+              averages: typeof json?.averages === "object" ? json.averages : {},
+              operationHour:
+                typeof json?.operationHour === "number" ||
+                typeof json?.operationHour === "string"
+                  ? String(json.operationHour)
+                  : null,
+              goodProduct:
+                typeof json?.goodProduct === "number"
+                  ? json.goodProduct
+                  : typeof json?.goodProduct === "string"
+                  ? Number.parseInt(json.goodProduct, 10) || null
+                  : null,
+              defectProduct:
+                typeof json?.defectProduct === "number"
+                  ? json.defectProduct
+                  : typeof json?.defectProduct === "string"
+                  ? Number.parseInt(json.defectProduct, 10) || null
+                  : null,
+              conclusion:
+                typeof json?.conclusion === "string"
+                  ? json.conclusion
+                  : "Simulation finished.",
+              updatedAt:
+                typeof json?.updatedAt === "string"
+                  ? json.updatedAt
+                  : undefined,
+            };
+            setRealtimeResult(result);
+          }
+        } catch (err) {
+          /* ignore */
+        }
+
+        try {
+          window.dispatchEvent(
+            new CustomEvent("__simulationDisabled", {
+              detail: { time: new Date().toISOString() },
+            })
+          );
+        } catch (err) {
+          /* ignore */
+        }
+      })();
     }
     prevIsSimulationRef.current = isSimulationMode;
   }, [isSimulationMode]);
@@ -692,6 +802,11 @@ export function SimulationProvider({
   return (
     <SimulationContext.Provider value={contextValue}>
       {children}
+      <SimulationResultModal
+        isOpen={realtimeResult !== null}
+        result={realtimeResult}
+        onCloseAction={dismissRealtimeResult}
+      />
     </SimulationContext.Provider>
   );
 }

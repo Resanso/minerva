@@ -1,0 +1,13 @@
+{
+  "lot": "SIM-001",
+  "status": "finish",
+  "averages": {
+    "temperature": 75,
+    "vibration": 0.12
+  },
+  "operationHour": 2,
+  "goodProduct": 28,
+  "defectProduct": 4,
+  "conclusion": "The simulation was successfully executed with stable parameters. Minor adjustments to cooling may reduce defects.",
+  "updatedAt": "2025-11-14T15:27:00.000Z"
+}

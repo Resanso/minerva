@@ -19,6 +19,7 @@ type MachineStreamTooltipsProps = {
   machineObjects: Map<string, any>;
   containerWidth: number;
   containerHeight: number;
+  showAll?: boolean;
 };
 
 // Mapping eksplisit dari InfluxDB machine name ke 3D model ID
@@ -120,6 +121,7 @@ export default function MachineStreamTooltips({
   machineObjects,
   containerWidth,
   containerHeight,
+  showAll = false,
 }: MachineStreamTooltipsProps) {
   const { readings } = useSensorStream({ limit: 32 });
   const [machinePositions, setMachinePositions] = useState<MachinePosition[]>(
@@ -142,7 +144,7 @@ export default function MachineStreamTooltips({
   }, [readings]);
 
   useEffect(() => {
-    if (!camera || machineObjects.size === 0 || !latestMachine) {
+    if (!camera || machineObjects.size === 0 || (!latestMachine && !showAll)) {
       setMachinePositions([]);
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
@@ -155,37 +157,89 @@ export default function MachineStreamTooltips({
       const positions: MachinePosition[] = [];
       const vector = new THREE.Vector3();
 
-      // Hanya proses mesin dengan data terbaru
-      const obj = findMatchingObject(latestMachine, machineObjects);
+      // If showAll is enabled (autonomous mode), compute positions for every
+      // model currently present in the `machineObjects` map. For each model we
+      // look up sensor readings that map to that model id (prefer accuracy
+      // sensors). Otherwise, behave like before and only compute for the
+      // latestMachine from the readings.
+      if (showAll) {
+        for (const [objId, objWrapper] of machineObjects) {
+          const candidate =
+            objWrapper && typeof objWrapper.updateWorldMatrix === "function"
+              ? objWrapper
+              : objWrapper?.object;
+          if (!candidate) continue;
 
-      if (!obj) {
-        console.warn(
-          `[MachineStreamTooltips] No 3D object found for machine: ${latestMachine}`,
-          `Available objects:`,
-          Array.from(machineObjects.keys())
-        );
-      }
+          const box = new THREE.Box3().setFromObject(candidate);
+          const center = box.getCenter(vector);
+          const top = new THREE.Vector3(center.x, box.max.y, center.z);
+          top.project(camera);
 
-      if (obj) {
-        const box = new THREE.Box3().setFromObject(obj);
-        const center = box.getCenter(vector);
-        const top = new THREE.Vector3(center.x, box.max.y, center.z);
-        top.project(camera);
+          const screenX = ((top.x + 1) / 2) * containerWidth;
+          const screenY = ((-top.y + 1) / 2) * containerHeight;
 
-        const screenX = ((top.x + 1) / 2) * containerWidth;
-        const screenY = ((-top.y + 1) / 2) * containerHeight;
+          if (
+            screenX >= 0 &&
+            screenX <= containerWidth &&
+            screenY >= 0 &&
+            screenY <= containerHeight
+          ) {
+            // Derive a display name: prefer the machineName from readings that
+            // map to this model id; otherwise fall back to userData.stepId or
+            // the model id itself.
+            const normalizedObjId = String(objId).toLowerCase();
 
-        if (
-          screenX >= 0 &&
-          screenX <= containerWidth &&
-          screenY >= 0 &&
-          screenY <= containerHeight
-        ) {
-          positions.push({
-            machineName: latestMachine,
-            screenX,
-            screenY,
-          });
+            const matchedReadings = readings.filter((r) => {
+              if (!r?.machineName) return false;
+              const mapped = mapInfluxToModelId(r.machineName || "");
+              if (mapped.includes(objId)) return true;
+              const normalizedReading = r.machineName
+                .toLowerCase()
+                .replace(/[-_\s\d]+/g, "");
+              if (
+                normalizedReading.includes(normalizedObjId) ||
+                normalizedObjId.includes(normalizedReading)
+              )
+                return true;
+              return false;
+            });
+
+            // Determine display name
+            const displayName =
+              (matchedReadings.length > 0 && matchedReadings[0].machineName) ||
+              (candidate.userData?.stepId as string) ||
+              String(objId);
+
+            positions.push({
+              machineName: displayName,
+              screenX,
+              screenY,
+            });
+          }
+        }
+      } else if (latestMachine) {
+        const obj = findMatchingObject(latestMachine, machineObjects);
+        if (obj) {
+          const box = new THREE.Box3().setFromObject(obj);
+          const center = box.getCenter(vector);
+          const top = new THREE.Vector3(center.x, box.max.y, center.z);
+          top.project(camera);
+
+          const screenX = ((top.x + 1) / 2) * containerWidth;
+          const screenY = ((-top.y + 1) / 2) * containerHeight;
+
+          if (
+            screenX >= 0 &&
+            screenX <= containerWidth &&
+            screenY >= 0 &&
+            screenY <= containerHeight
+          ) {
+            positions.push({
+              machineName: latestMachine,
+              screenX,
+              screenY,
+            });
+          }
         }
       }
 
@@ -200,18 +254,44 @@ export default function MachineStreamTooltips({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [camera, machineObjects, latestMachine, containerWidth, containerHeight]);
+  }, [
+    camera,
+    /* depend on map size so effect reruns when models load */ machineObjects.size,
+    latestMachine,
+    containerWidth,
+    containerHeight,
+    readings,
+    showAll,
+  ]);
 
   return (
     <>
-      {machinePositions.map((pos) => (
-        <MachineStreamTooltip
-          key={pos.machineName}
-          machineName={pos.machineName}
-          readings={readings}
-          screenPosition={{ x: pos.screenX, y: pos.screenY }}
-        />
-      ))}
+      {machinePositions.map((pos) => {
+        const machineName = pos.machineName;
+        // For autonomous mode we prefer to show accuracy sensor only when
+        // available — otherwise we fall back to all readings for that machine.
+        const accuracyFiltered = readings.filter(
+          (r) =>
+            r.machineName?.toLowerCase() === machineName.toLowerCase() &&
+            r.sensorName?.toLowerCase().includes("accuracy")
+        );
+        const readingsForTooltip =
+          accuracyFiltered.length > 0
+            ? accuracyFiltered
+            : readings.filter(
+                (r) =>
+                  r.machineName?.toLowerCase() === machineName.toLowerCase()
+              );
+
+        return (
+          <MachineStreamTooltip
+            key={machineName}
+            machineName={machineName}
+            readings={readingsForTooltip}
+            screenPosition={{ x: pos.screenX, y: pos.screenY }}
+          />
+        );
+      })}
     </>
   );
 }

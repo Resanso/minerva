@@ -7,7 +7,6 @@ import {
 } from "@/components/simulation/SimulationProvider";
 import BottomBar from "@/components/bottom-bar";
 import SimulationConfiguratorModal from "@/components/simulation/SimulationConfiguratorModal";
-import RealtimeResultModal from "@/components/simulation/RealtimeResultModal";
 import TopBar from "@/components/top-bar";
 import { HeroUIProvider } from "@heroui/react";
 
@@ -35,7 +34,6 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
           <BottomBar />
           <SimulationConfiguratorModal />
-          <RealtimeResultModal />
         </div>
       </SimulationProvider>
     </HeroUIProvider>
