@@ -144,6 +144,8 @@ export function SimulationProvider({
   const [realtimeResult, setRealtimeResult] = useState<RealtimeResult | null>(
     null
   );
+  const [suppressSimulationResultModal, setSuppressSimulationResultModal] =
+    useState(false);
 
   const startTimeRef = useRef<number | null>(null);
   const sequenceIntervalRef = useRef<number | null>(null);
@@ -799,11 +801,58 @@ export function SimulationProvider({
     prevIsSimulationRef.current = isSimulationMode;
   }, [isSimulationMode]);
 
+  // Listen for autonomous start/stop events so we can suppress the default
+  // SimulationResultModal while an autonomous flow is active (AutonomousResult
+  // modal will be used instead).
+  useEffect(() => {
+    const timerRef = { current: 0 as number | null };
+    const onStart = () => {
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      setSuppressSimulationResultModal(true);
+    };
+    const onStop = () => {
+      // keep suppression for a short grace period so the AutonomousResult
+      // modal can open without the SimulationResultModal flashing.
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
+        setSuppressSimulationResultModal(false);
+        timerRef.current = null;
+      }, 3000);
+    };
+
+    try {
+      window.addEventListener("__autonomousStarted", onStart as EventListener);
+      window.addEventListener("__autonomousStopped", onStop as EventListener);
+    } catch (err) {
+      // ignore
+    }
+    return () => {
+      try {
+        window.removeEventListener(
+          "__autonomousStarted",
+          onStart as EventListener
+        );
+        window.removeEventListener(
+          "__autonomousStopped",
+          onStop as EventListener
+        );
+      } catch (err) {
+        // ignore
+      }
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
   return (
     <SimulationContext.Provider value={contextValue}>
       {children}
       <SimulationResultModal
-        isOpen={realtimeResult !== null}
+        isOpen={realtimeResult !== null && !suppressSimulationResultModal}
         result={realtimeResult}
         onCloseAction={dismissRealtimeResult}
       />
