@@ -165,7 +165,7 @@ function Band({
   useRopeJoint(j2, j3, [[0, 0, 0], [0, 0, 0], 1]);
   useSphericalJoint(j3, card, [
     [0, 0, 0],
-    [0, 1.45, 0],
+    [0, 2.2, 0],
   ]);
 
   useEffect(() => {
@@ -315,7 +315,7 @@ function Band({
           useMap: true,
           map: texture,
           repeat: [-4, 1],
-          lineWidth: 6,
+          lineWidth: 4.5,
         })}
       </mesh>
     </>
