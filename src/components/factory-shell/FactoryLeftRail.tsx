@@ -6,7 +6,6 @@ import {
   Box,
   Building2,
   Database,
-  Globe,
   PanelLeft,
   Play,
   Sparkles,
@@ -107,27 +106,44 @@ export default function FactoryLeftRail({
           expanded ? "w-[260px]" : "w-[60px]"
         )}
       >
-        <div className="flex h-14 items-center justify-center border-b border-[#333333]">
-          <RailButton title={expanded ? "Collapse sidebar" : "Expand sidebar"} onClick={onToggle}>
-            <PanelLeft className="h-5 w-5" />
-          </RailButton>
-        </div>
-
-        <div className="flex flex-col items-center gap-1.5 py-3">
-          {items.map((item) => (
-            <RailButton
-              key={item.key}
-              title={item.title}
-              active={item.active}
-              onClick={item.onClick}
-            >
-              {item.icon}
+        {expanded ? (
+          <div className="relative flex h-14 w-full items-center border-b border-[#333333] px-3">
+            <img
+              src="/minerva-logo.png"
+              alt="Minerva"
+              className="absolute left-1/2 h-9 w-auto -translate-x-1/2"
+            />
+            <div className="ml-auto">
+              <RailButton title="Collapse sidebar" onClick={onToggle}>
+                <PanelLeft className="h-5 w-5" />
+              </RailButton>
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-14 items-center justify-center border-b border-[#333333]">
+            <RailButton title="Expand sidebar" onClick={onToggle}>
+              <PanelLeft className="h-5 w-5" />
             </RailButton>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {!expanded && (
+          <div className="flex flex-col items-center gap-1.5 py-3">
+            {items.map((item) => (
+              <RailButton
+                key={item.key}
+                title={item.title}
+                active={item.active}
+                onClick={item.onClick}
+              >
+                {item.icon}
+              </RailButton>
+            ))}
+          </div>
+        )}
 
         {expanded && (
-          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3">
             {items.map((item) => (
               <button
                 key={item.key}
@@ -162,23 +178,38 @@ export default function FactoryLeftRail({
           </div>
         )}
 
-        <div className="flex flex-col items-center gap-1.5 border-t border-[#333333] py-3">
-          <Link
-            href="/compro"
-            title="Company Profile"
-            aria-label="Company Profile"
-            className="flex h-10 w-10 items-center justify-center rounded-md text-[#acacbe] transition-all hover:bg-[rgba(232,234,237,0.08)] hover:text-[#e8eaed]"
-          >
-            <Building2 className="h-5 w-5" />
-          </Link>
-          <Link
-            href="/geogemma"
-            title="GeoGemma demo"
-            aria-label="GeoGemma demo"
-            className="flex h-10 w-10 items-center justify-center rounded-md text-[#acacbe] transition-all hover:bg-[rgba(232,234,237,0.08)] hover:text-[#e8eaed]"
-          >
-            <Globe className="h-5 w-5" />
-          </Link>
+        <div className="border-t border-[#333333] py-3">
+          {expanded ? (
+            <div className="px-3">
+              <Link
+                href="/compro"
+                title="Company Profile"
+                aria-label="Company Profile"
+                className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-[#2a2a2a]"
+              >
+                <span className="text-[#acacbe]">
+                  <Building2 className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm text-[#e8eaed]">Company Profile</span>
+                  <span className="block truncate text-xs text-[#9aa0a6]">
+                    About Minerva
+                  </span>
+                </span>
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5">
+              <Link
+                href="/compro"
+                title="Company Profile"
+                aria-label="Company Profile"
+                className="flex h-10 w-10 items-center justify-center rounded-md text-[#acacbe] transition-all hover:bg-[rgba(232,234,237,0.08)] hover:text-[#e8eaed]"
+              >
+                <Building2 className="h-5 w-5" />
+              </Link>
+            </div>
+          )}
         </div>
       </aside>
       <ProductDataViewerModal isOpen={productOpen} onCloseAction={() => setProductOpen(false)} />
