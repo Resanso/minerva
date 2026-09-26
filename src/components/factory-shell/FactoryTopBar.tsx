@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, Sparkles } from "lucide-react";
+import { Bell, Database, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LiveSensorTicker from "@/components/LiveSensorTicker";
 import ProductDataViewerModal from "@/components/ProductDataViewerModal";
@@ -67,7 +67,7 @@ export default function FactoryTopBar({ leftOffset }: { leftOffset: number }) {
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button
             size="sm"
-            className="gap-1.5 rounded-lg bg-[#3c4043] font-medium text-[#e8eaed] hover:bg-[#4e5156]"
+            className="gap-1.5 rounded-md bg-[#2d2d2d] font-medium text-[#e8eaed] hover:bg-[#3d3d3d] hover:text-white"
             onClick={() => openAskAi()}
           >
             <Sparkles className="h-3.5 w-3.5" />
@@ -75,9 +75,10 @@ export default function FactoryTopBar({ leftOffset }: { leftOffset: number }) {
           </Button>
           <Button
             size="sm"
-            className="hidden rounded-lg bg-[#3c4043] font-medium text-[#e8eaed] hover:bg-[#4e5156] sm:inline-flex"
+            className="hidden gap-1.5 rounded-md bg-[#2d2d2d] font-medium text-[#e8eaed] hover:bg-[#3d3d3d] hover:text-white sm:inline-flex"
             onClick={() => setProductOpen(true)}
           >
+            <Database className="h-3.5 w-3.5" />
             Data Produk
           </Button>
           <div ref={bellRef} className="relative">

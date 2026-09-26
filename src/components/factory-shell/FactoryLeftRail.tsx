@@ -5,9 +5,9 @@ import Link from "next/link";
 import {
   Box,
   Building2,
-  ChevronRight,
   Database,
   Globe,
+  PanelLeft,
   Play,
   Sparkles,
 } from "lucide-react";
@@ -109,9 +109,7 @@ export default function FactoryLeftRail({
       >
         <div className="flex h-14 items-center justify-center border-b border-[#333333]">
           <RailButton title={expanded ? "Collapse sidebar" : "Expand sidebar"} onClick={onToggle}>
-            <span className={cn("transition-transform duration-300", expanded && "rotate-180")}>
-              <ChevronRight className="h-5 w-5" />
-            </span>
+            <PanelLeft className="h-5 w-5" />
           </RailButton>
         </div>
 

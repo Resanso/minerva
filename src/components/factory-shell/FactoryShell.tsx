@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import GLTFViewer from "@/components/GLTFViewer";
-import BottomBar from "@/components/bottom-bar";
 import FactoryTopBar from "./FactoryTopBar";
 import FactoryLeftRail from "./FactoryLeftRail";
 import FactoryRightRail from "./FactoryRightRail";
@@ -32,8 +31,6 @@ export default function FactoryShell() {
         <FactoryPromptBar />
       </main>
       <FactoryRightRail />
-      {/* Simulation transport docks above the prompt pill on this route. */}
-      <BottomBar />
     </div>
   );
 }

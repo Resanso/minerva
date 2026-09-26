@@ -24,7 +24,7 @@ const formatSeconds = (seconds: number) => {
   return `${mins}:${secs}`;
 };
 
-function BottomBar() {
+function BottomBar({ embedded = false }: { embedded?: boolean }) {
   const [isProductModalOpen, setProductModalOpen] = useState(false);
   const [productSuccessMessage, setProductSuccessMessage] = useState<
     string | null
@@ -242,10 +242,12 @@ function BottomBar() {
   return (
     <footer
       className={cn(
-        "fixed bg-transparent left-1/2 z-50 w-[min(100%-2rem,48rem)] -translate-x-1/2 rounded-3xl px-6 py-4 text-slate-200",
+        embedded
+          ? "w-full text-slate-200"
+          : "fixed bg-transparent left-1/2 z-50 w-[min(100%-2rem,48rem)] -translate-x-1/2 rounded-3xl px-6 py-4 text-slate-200",
         // On the factory shell (`/`) the Ask-AI prompt pill owns bottom-center,
         // so the transport docks above it. Everywhere else it stays at bottom-4.
-        pathname === "/" ? "bottom-24" : "bottom-4"
+        !embedded && (pathname === "/" ? "bottom-24" : "bottom-4")
       )}
     >
       <div className="flex flex-col gap-3">
