@@ -1,34 +1,20 @@
-"use client";
+import { Roboto } from "next/font/google";
+import FactoryShell from "@/components/factory-shell/FactoryShell";
 
-import React, { useEffect, useState } from "react";
-import GLTFViewer from "@/components/GLTFViewer";
+const roboto = Roboto({
+  weight: ["300", "400", "500", "700"],
+  subsets: ["latin"],
+  display: "swap",
+});
 
+// Minerva factory dashboard (monitoring + 3D digital twin + simulation)
+// presented in Google-dark chrome (Roboto + #181818 surfaces). AppShell
+// global TopBar/BottomBar are suppressed on this route; the shell below
+// owns the full viewport.
 export default function Home() {
-  const [showProfile, setShowProfile] = useState(false);
-
-  useEffect(() => {
-    // localStorage persistence temporarily disabled per request.
-    // try {
-    //   const shown = localStorage.getItem("companyProfileShown");
-    //   if (!shown) setShowProfile(true);
-    // } catch (e) {
-    //   setShowProfile(true);
-    // }
-    // For now, always show the profile when the page loads.
-    setShowProfile(true);
-  }, []);
-
-  const handleClose = () => {
-    // persistence disabled while testing; uncomment to re-enable
-    // try {
-    //   localStorage.setItem("companyProfileShown", "1");
-    // } catch (e) {}
-    setShowProfile(false);
-  };
-
   return (
-    <>
-      <GLTFViewer />
-    </>
+    <div className={roboto.className}>
+      <FactoryShell />
+    </div>
   );
 }

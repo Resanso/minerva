@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type FormEvent,
@@ -137,7 +138,7 @@ const SparklesIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export function AskAiButton({ className }: { className?: string }) {
+export function AskAiButton({ className, hideTrigger }: { className?: string; hideTrigger?: boolean }) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
@@ -145,6 +146,18 @@ export function AskAiButton({ className }: { className?: string }) {
   const [rawData, setRawData] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // External opener for shells that own their own trigger UI (e.g. factory
+  // rail / prompt bar): dispatch `window.__openAskAi` with `{ question? }`.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ question?: string }>).detail;
+      if (typeof detail?.question === "string") setQuestion(detail.question);
+      setOpen(true);
+    };
+    window.addEventListener("__openAskAi", handler as EventListener);
+    return () => window.removeEventListener("__openAskAi", handler as EventListener);
+  }, []);
 
   const trimmedQuestion = useMemo(() => question.trim(), [question]);
 
@@ -223,19 +236,21 @@ export function AskAiButton({ className }: { className?: string }) {
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="lg"
-          className={cn(
-            "min-w-[120px] items-center gap-2 text-sm font-semibold tracking-wide",
-            className
-          )}
-        >
-          <SparklesIcon className="h-4 w-4" />
-          Ask AI
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="lg"
+            className={cn(
+              "min-w-[120px] items-center gap-2 text-sm font-semibold tracking-wide",
+              className
+            )}
+          >
+            <SparklesIcon className="h-4 w-4" />
+            Ask AI
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="p-6">
         <div className="flex flex-col gap-6">
           <DialogHeader>

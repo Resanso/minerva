@@ -12,6 +12,7 @@ import AutonomousStartConfirmModal from "./simulation/AutonomousStartConfirmModa
 import AutonomousResultModal from "./simulation/AutonomousResultModal";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { usePathname } from "next/navigation";
 
 const formatSeconds = (seconds: number) => {
   if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
@@ -54,6 +55,7 @@ function BottomBar() {
   } = useSimulation();
 
   const isRealtime = simulationVariant === "realtime";
+  const pathname = usePathname();
 
   const progressPercent = useMemo(() => {
     if (!isSimulationMode) return 0;
@@ -238,7 +240,14 @@ function BottomBar() {
   );
 
   return (
-    <footer className="fixed bottom-4 bg-transparent left-1/2 z-50 w-[min(100%-2rem,48rem)] -translate-x-1/2 rounded-3xl px-6 py-4 text-slate-200">
+    <footer
+      className={cn(
+        "fixed bg-transparent left-1/2 z-50 w-[min(100%-2rem,48rem)] -translate-x-1/2 rounded-3xl px-6 py-4 text-slate-200",
+        // On the factory shell (`/`) the Ask-AI prompt pill owns bottom-center,
+        // so the transport docks above it. Everywhere else it stays at bottom-4.
+        pathname === "/" ? "bottom-24" : "bottom-4"
+      )}
+    >
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-center gap-3">
           <div className="flex flex-wrap items-center gap-3">
